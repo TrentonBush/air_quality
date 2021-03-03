@@ -1,20 +1,26 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Tuple, Type
+from typing import Dict, Tuple, Type, Optional
 from collections.abc import Mapping
+
+def _bit_mask(value: bytes, bit_mask: Optional[int]) -> bytes:
+    if bit_mask is None:
+        return value
+    raise NotImplementedError
+
 
 class Encoder(ABC):
     """base class for encode/decode methods to convert between human- and machine-readable data"""
 
     @staticmethod
     @abstractmethod
-    def encode(self, value, field: Field):
+    def encode(value, field: Field) -> bytes:
         """encode human-readable value to machine value"""
         pass
 
     @staticmethod
     @abstractmethod
-    def decode(self, value: bytes, field: Field):
+    def decode(value: bytes, field: Field):
         """decode machine value to human-readable value"""
         pass
 
@@ -52,7 +58,7 @@ class Field(object):
     """Store immutable config for a field or flag in an i2c register"""
     name: str
     byte_index: Tuple[int, ...] = (0,)
-    bit_mask: int = 0xFF
+    bit_mask: Optional[int] = None
     encoder: Type[Encoder] = PassThroughEncoder  # uses static methods
     bit_width = 8
     read_only = False
@@ -61,10 +67,10 @@ class Field(object):
         self._slice = slice(byte_index[0], byte_index[-1] + 1) # for slicing bytes from register
     
     def encode(self, value) -> bytes:
-        return encoder.encode(value, self)
+        return self.encoder.encode(value, self)
 
     def decode(self, value: bytes):
-        return encoder.decode(value, self)
+        return self.encoder.decode(value, self)
 
 
 @dataclass(frozen=True)
