@@ -1,34 +1,37 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Sequence, Tuple
+from typing import Dict, Tuple, Type
+from collections.abc import Mapping
 
+class Encoder(ABC):
+    """base class for encode/decode methods to convert between human- and machine-readable data"""
 
-class ValueEncoder(ABC):
-    """base class for encode/decode methods to convert between human- and hardware-readable data"""
-
-    @abstractmethod
-    def encode(self, value):
-        """encode human-readable value to hardware value"""
-        raise NotImplementedError
-
-    @abstractmethod
-    def decode(self, value):
-        """decode hardware value to human-readable value"""
-        raise NotImplementedError
-
-
-class PassThroughEncoder(ValueEncoder):
-    """returns values unchanged"""
     @staticmethod
-    def decode(value):
-        return value
+    @abstractmethod
+    def encode(self, value, field: Field):
+        """encode human-readable value to machine value"""
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def decode(self, value: bytes, field: Field):
+        """decode machine value to human-readable value"""
+        pass
+
+
+class PassThroughEncoder(Encoder):
+    """returns values unchanged"""
 
     @staticmethod
     def encode(value):
         return value
 
+    @staticmethod
+    def decode(value):
+        return value
 
-class LookupTable(ValueEncoder):
+
+class LookupTable(Encoder):
     """Encode with a dictionary of values"""
 
     def __init__(self, lookup_table: dict):
@@ -50,11 +53,18 @@ class Field(object):
     name: str
     byte_index: Tuple[int, ...] = (0,)
     bit_mask: int = 0xFF
-    encoder: ValueEncoder = PassThroughEncoder()
+    encoder: Type[Encoder] = PassThroughEncoder  # uses static methods
     bit_width = 8
     read_only = False
 
-    # self._byte_index = slice(byte_index[0], byte_index[-1] + 1)
+    def __post_init__(self):
+        self._slice = slice(byte_index[0], byte_index[-1] + 1) # for slicing bytes from register
+    
+    def encode(self, value) -> bytes:
+        return encoder.encode(value, self)
+
+    def decode(self, value: bytes):
+        return encoder.decode(value, self)
 
 
 @dataclass(frozen=True)
@@ -62,7 +72,18 @@ class Register(object):
     """Store immutable config for an i2c register"""
     name: str
     address: int
-    fields: Sequence[Field]
+    fields: Dict[str, Field]
     bit_width = 8
     read_only = False
     volatile = True
+
+
+@dataclass(frozen=True)
+class Device(object):
+    """Store immutable config for an I2C device"""
+    name: str
+    chip_id: int
+    i2c_addresses: Mapping[int, int]
+    registers: Dict[str, Register]
+    byte_order = 'big'
+    bit_width: int = 8
