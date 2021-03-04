@@ -23,7 +23,7 @@ class Int16(Encoder):
     @staticmethod
     def decode(value: bytes, field) -> int:
         if len(value) != 2:
-            raise ValueError(f"Not 16 bits. Given: {value}")
+            raise ValueError(f"Not 16 bits. Given: {[f'0x{b:02x}' for b in value]}")
         value = _bit_mask(value, field.bit_mask)
         return int.from_bytes(value, BMP280.hardware.byte_order, signed=True)
 
@@ -38,7 +38,7 @@ class UInt16(Encoder):
     @staticmethod
     def decode(value: bytes, field) -> int:
         if len(value) != 2:
-            raise ValueError(f"Not 16 bits. Given: {value}")
+            raise ValueError(f"Not 16 bits. Given: {[f'0x{b:02x}' for b in value]}")
         value = _bit_mask(value, field.bit_mask)
         return int.from_bytes(value, BMP280.hardware.byte_order)
 
