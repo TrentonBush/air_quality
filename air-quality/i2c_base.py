@@ -71,8 +71,8 @@ class Field(object):
         self._slice = slice(self.byte_index[0], self.byte_index[-1] + 1)
 
     def __repr__(self):
-        attrs = {attr: val for attr, val in self.__dir__.items() if not attr.startswith("_")}
-        sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
+        attrs = ["name", "byte_index", "bit_mask", "encoder", "n_bits", "read_only"]
+        sig = ", ".join(f"{attr}={getattr(self, attr)!r}" for attr in attrs)
         return f"{self.__class__.__name__}({sig})"
 
     def encode(self, value) -> bytes:
@@ -102,7 +102,8 @@ class Register(object):
         self.volatile = volatile
 
     def __repr__(self):
-        attrs = {attr: val for attr, val in self.__dir__.items() if not attr.startswith("_")}
+        attrs = ["name", "address", "fields", "n_bits", "read_only", "volatile"]
+        attrs = {attr: getattr(self, attr) for attr in attrs}
         attrs["fields"] = list(attrs["fields"].values())
         sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
         return f"{self.__class__.__name__}({sig})"
@@ -128,7 +129,8 @@ class Device(object):
         self.word_size = word_size
 
     def __repr__(self):
-        attrs = {attr: val for attr, val in self.__dir__.items() if not attr.startswith("_")}
+        attrs = ["name", "chip_id", "i2c_addresses", "registers", "byte_order", "word_size"]
+        attrs = {attr: getattr(self, attr) for attr in attrs}
         attrs["registers"] = list(attrs["registers"].values())
         sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
         return f"{self.__class__.__name__}({sig})"
