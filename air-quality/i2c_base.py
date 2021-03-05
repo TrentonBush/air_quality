@@ -1,13 +1,27 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Optional, Any, Sequence
 from collections.abc import Mapping
+from collections import defaultdict
+from functools import reduce
 from smbus2 import SMBus
 
 
-def _bit_mask(value: bytes, bit_mask: Optional[int]) -> bytes:
-    if bit_mask is None:
-        return value
-    raise NotImplementedError
+def _count_trailing_zeros(mask: int) -> int:
+    """count the trailing zeros of a bit mask. Used for shifting.
+
+    Args:
+        mask (int): bit mask, eg 0b00111000
+
+    Returns:
+        int: number of trailing zeros
+    """
+    count = 0
+    for i in range(mask.bit_length()):
+        if mask & 1:
+            return count
+        count += 1
+        mask >>= 1
+    return count
 
 
 class Encoder(ABC):
@@ -47,7 +61,7 @@ class LookupTable(Encoder):
         for k, v in self.lookup_table.items():
             if v == value:
                 return k
-        raise ValueError("{} not in lookup table".format(value))
+        raise ValueError(f"{value} not in lookup table")
 
 
 class Field(object):
@@ -59,26 +73,48 @@ class Field(object):
         byte_index: Tuple[int, ...] = (0,),
         bit_mask: Optional[int] = None,
         encoder: Encoder = PassThroughEncoder(),
-        n_bits: int = 8,
         read_only: bool = False,
     ) -> None:
         self.name = name
         self.byte_index = byte_index
         self.bit_mask = bit_mask
         self.encoder = encoder
-        self.n_bits = n_bits
         self.read_only = read_only
         self._slice = slice(self.byte_index[0], self.byte_index[-1] + 1)
+        self._shift = None
+        if self.bit_mask is not None:
+            self._shift = _count_trailing_zeros(self.bit_mask)
 
     def __repr__(self):
-        attrs = ["name", "byte_index", "bit_mask", "encoder", "n_bits", "read_only"]
+        attrs = ["name", "byte_index", "bit_mask", "encoder", "read_only"]
         sig = ", ".join(f"{attr}={getattr(self, attr)!r}" for attr in attrs)
         return f"{self.__class__.__name__}({sig})"
 
-    def encode(self, value) -> bytes:
-        return self.encoder.encode(value, self)
+    def _decode_mask(self, raw_bytes: bytes) -> bytes:
+        if self.bit_mask is None:
+            return raw_bytes
+        out = int.from_bytes(raw_bytes, "big")  # always 'big' for masking
+        out &= self.bit_mask
+        out >>= self._shift  # type: ignore    # _shift is None when bit_mask is None
+        return out.to_bytes(
+            length=-(out.bit_length() // -8), byteorder="big"  # double negation is like ceil()
+        )
+
+    def _encode_mask(self, encoded_bytes: bytes) -> bytes:
+        if self.bit_mask is None:
+            return encoded_bytes
+        out = int.from_bytes(encoded_bytes, "big")
+        out <<= self._shift  # type: ignore    # _shift is None when bit_mask is None
+        return out.to_bytes(
+            length=-(out.bit_length() // -8), byteorder="big"  # double negation is like ceil()
+        )
+
+    def encode(self, value: Any) -> bytes:
+        out = self.encoder.encode(value, self)
+        return self._encode_mask(out)
 
     def decode(self, value: bytes):
+        value = self._decode_mask(value)
         return self.encoder.decode(value, self)
 
 
@@ -107,6 +143,30 @@ class Register(object):
         attrs["fields"] = list(attrs["fields"].values())
         sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
         return f"{self.__class__.__name__}({sig})"
+
+    def _raw_bytes_to_field_values(self, raw_bytes: bytes) -> Dict[str, Any]:
+        out = {}
+        for field in self.fields.values():
+            bytes_ = raw_bytes[field._slice]
+            out[field.name] = field.decode(bytes_)
+        return out
+
+    def _field_values_to_raw_bytes(self, field_values: Dict[str, Any]) -> bytes:
+        # determine if multiple fields are encoded in the same byte
+        byte_map = defaultdict(list)
+        for name, value in field_values.items():
+            field = self.fields[name]
+            byte_map[field.byte_index].append(field.encode(value))
+        # merge multiples
+        for index, values in byte_map.items():
+            if len(values) == 1:
+                continue
+            ints = [int.from_bytes(val, "big") for val in values]
+            merged = reduce(lambda x, y: x | y, ints)
+            n_bytes = index[-1] - index[0] + 1
+            byte_map[index] = [merged.to_bytes(n_bytes, "big")]
+        # join in correct order
+        return b"".join((byte_map[idx][0] for idx in sorted(byte_map)))
 
 
 class Device(object):
@@ -154,7 +214,7 @@ class BaseDeviceAPI(ABC):
     def _i2c_write(self, register: Register, values: bytes):
         self._i2c.write_i2c_block_data(self.address, register.address, values)
 
-    def _i2c_read(self, register: Register):
+    def _i2c_read(self, register: Register) -> bytes:
         return bytes(
             self._i2c.read_i2c_block_data(
                 self.address,
@@ -163,12 +223,6 @@ class BaseDeviceAPI(ABC):
                 register.n_bits // self.hardware.word_size,
             )
         )
-
-    def _raw_bytes_to_field_values(self, register: Register, reg_values: bytes) -> Dict[str, Any]:
-        raise NotImplementedError
-
-    def _field_values_to_raw_bytes(self, register: Register, field_values: Dict[str, Any]) -> bytes:
-        raise NotImplementedError
 
 
 class BaseRegisterAPI(ABC):
