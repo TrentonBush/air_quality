@@ -15,6 +15,8 @@ def _count_trailing_zeros(mask: int) -> int:
     Returns:
         int: number of trailing zeros
     """
+    if mask == 0:
+        raise ValueError("mask is all zeros")
     count = 0
     for i in range(mask.bit_length()):
         if mask & 1:
@@ -38,13 +40,14 @@ class Encoder(ABC):
         ...
 
 
-class PassThroughEncoder(Encoder):
-    """returns values unchanged"""
+class UIntEncoder(Encoder):
+    """interpret bytes as unsigned integer"""
 
-    def encode(self, value, field):
-        return value
+    def encode(self, value: int, field) -> bytes:
+        n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
+        return value.to_bytes(n_bytes, "big")
 
-    def decode(self, value, field):
+    def decode(self, value: bytes, field):
         return value
 
 
