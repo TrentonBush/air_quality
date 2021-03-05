@@ -29,6 +29,22 @@ def _count_trailing_zeros(mask: int) -> int:
 class Encoder(ABC):
     """base class for encode/decode methods to convert between human- and machine-readable data"""
 
+    def __eq__(self, other):
+        if other.__class__ is self.__class__:
+            # hacky but most Encoders will have zero attributes
+            comps = [
+                attr
+                for attr in dir(self)
+                if not (attr.startswith("__") or attr in {"encode", "decode"})
+            ]
+            bools = [getattr(self, attr) == getattr(other, attr) for attr in comps]
+            return all(bools)  # all([]) -> True
+        return NotImplemented
+
+    def __repr__(self):
+        # subclasses with state must define their own __repr__
+        return f"{self.__class__.__name__}()"
+
     @abstractmethod
     def encode(self, value, field) -> bytes:
         """encode human-readable value to machine value"""
@@ -48,7 +64,7 @@ class UIntEncoder(Encoder):
         return value.to_bytes(n_bytes, "big")
 
     def decode(self, value: bytes, field):
-        return value
+        return int.from_bytes(value, "big")
 
 
 class LookupTable(Encoder):
@@ -75,7 +91,7 @@ class Field(object):
         name: str,
         byte_index: Tuple[int, ...] = (0,),
         bit_mask: Optional[int] = None,
-        encoder: Encoder = PassThroughEncoder(),
+        encoder: Encoder = UIntEncoder(),
         read_only: bool = False,
     ) -> None:
         self.name = name
@@ -93,24 +109,28 @@ class Field(object):
         sig = ", ".join(f"{attr}={getattr(self, attr)!r}" for attr in attrs)
         return f"{self.__class__.__name__}({sig})"
 
+    def __eq__(self, other):
+        if other.__class__ is self.__class__:
+            comps = ["name", "byte_index", "bit_mask", "encoder", "read_only", "_slice", "_shift"]
+            bools = [getattr(self, attr) == getattr(other, attr) for attr in comps]
+            return all(bools)
+        return NotImplemented
+
     def _decode_mask(self, raw_bytes: bytes) -> bytes:
         if self.bit_mask is None:
             return raw_bytes
         out = int.from_bytes(raw_bytes, "big")  # always 'big' for masking
         out &= self.bit_mask
         out >>= self._shift  # type: ignore    # _shift is None when bit_mask is None
-        return out.to_bytes(
-            length=-(out.bit_length() // -8), byteorder="big"  # double negation is like ceil()
-        )
+        return out.to_bytes(length=len(raw_bytes), byteorder="big")
 
     def _encode_mask(self, encoded_bytes: bytes) -> bytes:
         if self.bit_mask is None:
             return encoded_bytes
         out = int.from_bytes(encoded_bytes, "big")
         out <<= self._shift  # type: ignore    # _shift is None when bit_mask is None
-        return out.to_bytes(
-            length=-(out.bit_length() // -8), byteorder="big"  # double negation is like ceil()
-        )
+        n_bytes = self.byte_index[-1] - self.byte_index[0] + 1
+        return out.to_bytes(length=n_bytes, byteorder="big")
 
     def encode(self, value: Any) -> bytes:
         out = self.encoder.encode(value, self)
