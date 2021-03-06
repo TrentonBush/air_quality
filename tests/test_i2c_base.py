@@ -1,5 +1,5 @@
 import pytest
-from sensors.i2c_base import _count_trailing_zeros, Field, UIntEncoder
+from sensors.i2c_base import _count_trailing_zeros, Field, UIntEncoder, Register, Device
 
 
 def test__count_trailing_zeros__edge_no_trailing():
@@ -177,4 +177,78 @@ def test_Field_with_UIntEncoder__decode_normal_multi_byte():
     input_value = (0xFFF000).to_bytes(3, "big")
     expected = 0x00FF00
     actual = field.decode(input_value)
+    assert actual == expected
+
+
+def test_Register___eq__():
+    r1 = Register("my_register", 0xFF, fields=(Field("f1"), Field("f2")))
+    r2 = Register("other", 0x00, fields=[Field("f3")])
+    assert not r1 == r2
+    assert r1 == r1
+
+
+def test_Register___repr__():
+    expected = Register("my_register", 0xFF, fields=(Field("f1"), Field("f2")))
+    actual = eval(repr(expected))
+    assert actual == expected
+
+
+def test_Register__raw_bytes_to_field_values():
+    reg = Register(
+        "my_register", 0xFF, fields=(Field("f1", bit_mask=0xF0), Field("f2", bit_mask=0x0F))
+    )
+    input_bytes = bytes([0b00011000])
+    expected = {"f1": 0b0001, "f2": 0b1000}
+    actual = reg._raw_bytes_to_field_values(input_bytes)
+    assert actual == expected
+
+
+def test_Register__field_values_to_raw_bytes__two_fields_in_one_byte():
+    reg = Register(
+        "my_register", 0xFF, fields=[Field("f1", bit_mask=0xF0), Field("f2", bit_mask=0x0F)]
+    )
+    input_field_values = {"f1": 0b0001, "f2": 0b1000}
+    expected = bytes([0b00011000])
+    actual = reg._field_values_to_raw_bytes(input_field_values)
+    assert actual == expected
+
+
+def test_Register__field_values_to_raw_bytes__two_fields_in_separate_bytes():
+    reg = Register(
+        "my_register", 0xFF, fields=[Field("f1", byte_index=(0,)), Field("f2", byte_index=(1,))]
+    )
+    input_field_values = {"f1": 0xFF, "f2": 0x00}
+    expected = b"\xff\x00"
+    actual = reg._field_values_to_raw_bytes(input_field_values)
+    assert actual == expected
+
+
+def test_Device___eq__():
+    d1 = Device(
+        "my_device",
+        0xFF,
+        {0: 0x00, 1: 0xFF},
+        registers=[
+            Register("r1", 0x00, fields=[Field("f1")]),
+            Register("r2", 0x01, fields=[Field("f2")]),
+        ],
+    )
+    d2 = Device(
+        "other", 0x00, {0: 0x01, 1: 0xFE}, registers=[Register("r3", 0x02, fields=[Field("f4")])]
+    )
+    assert not d1 == d2
+    assert d1 == d1
+
+
+def test_Device___repr__():
+    expected = Device(
+        "my_device",
+        0xFF,
+        {0: 0x00, 1: 0xFF},
+        registers=[
+            Register("r1", 0x00, fields=[Field("f1")]),
+            Register("r2", 0x01, fields=[Field("f2")]),
+        ],
+    )
+    actual = eval(repr(expected))
     assert actual == expected
