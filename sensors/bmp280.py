@@ -7,40 +7,11 @@ from .i2c_base import (
     Field,
     Encoder,
     LookupTable,
-    _bit_mask,
     BaseDeviceAPI,
     BaseRegisterAPI,
+    UIntEncoder,
+    SIntEncoder,
 )
-
-
-class Int16(Encoder):
-    """Signed 16 bit integer"""
-
-    @staticmethod
-    def encode(value: int, field) -> bytes:
-        pass  # relevant field is read-only
-
-    @staticmethod
-    def decode(value: bytes, field) -> int:
-        if len(value) != 2:
-            raise ValueError(f"Not 16 bits. Given: {[f'0x{b:02x}' for b in value]}")
-        value = _bit_mask(value, field.bit_mask)
-        return int.from_bytes(value, BMP280.hardware.byte_order, signed=True)
-
-
-class UInt16(Encoder):
-    """Unsigned 16 bit integer"""
-
-    @staticmethod
-    def encode(value: int, field) -> bytes:
-        pass  # relevant field is read-only
-
-    @staticmethod
-    def decode(value: bytes, field) -> int:
-        if len(value) != 2:
-            raise ValueError(f"Not 16 bits. Given: {[f'0x{b:02x}' for b in value]}")
-        value = _bit_mask(value, field.bit_mask)
-        return int.from_bytes(value, BMP280.hardware.byte_order)
 
 
 class BMP280(BaseDeviceAPI):
@@ -49,7 +20,7 @@ class BMP280(BaseDeviceAPI):
         chip_id=0x58,
         i2c_addresses={0: 0x76, 1: 0x77},  # address pin logic level 0, 1 (GND, VCC)
         registers=(
-            Register("chip_id", 0xD0, fields=[Field("id")], read_only=True, volatile=False),
+            Register("chip_id", 0xD0, fields=[Field("id")], read_only=True, non_volatile=True),
             Register("reset", 0xE0, fields=[Field("reset")]),
             Register(
                 "status",
@@ -67,12 +38,16 @@ class BMP280(BaseDeviceAPI):
                     Field(
                         "osrs_t",
                         bit_mask=0b11100000,  # Temperature oversampling
-                        encoder=LookupTable({1: 0b001, 2: 0b010, 4: 0b011, 8: 0b100, 16: 0b101}),
+                        encoder=LookupTable(
+                            {0: 0b000, 1: 0b001, 2: 0b010, 4: 0b011, 8: 0b100, 16: 0b101}
+                        ),
                     ),
                     Field(
                         "osrs_p",
                         bit_mask=0b00011100,  # Pressure oversampling
-                        encoder=LookupTable({1: 0b001, 2: 0b010, 4: 0b011, 8: 0b100, 16: 0b101}),
+                        encoder=LookupTable(
+                            {0: 0b000, 1: 0b001, 2: 0b010, 4: 0b011, 8: 0b100, 16: 0b101}
+                        ),
                     ),
                     Field(
                         "mode",
@@ -86,8 +61,8 @@ class BMP280(BaseDeviceAPI):
                 0xF5,
                 fields=[
                     Field(
-                        "t_sb",
-                        bit_mask=0b11100000,  # Temp standby duration in 'normal' power mode
+                        "t_sb",  # Temp standby duration in 'normal' power mode
+                        bit_mask=0b11100000,
                         encoder=LookupTable(
                             {
                                 0.5: 0b000,
@@ -101,7 +76,11 @@ class BMP280(BaseDeviceAPI):
                             }
                         ),
                     ),
-                    Field("filter", bit_mask=0b00011100),  # time constant of the IIR filter
+                    Field(
+                        "filter",  # time constant of the IIR filter
+                        bit_mask=0b00011100,
+                        encoder=LookupTable({0: 0b000, 2: 0b001, 4: 0b010, 8: 0b011, 16: 0b100}),
+                    ),
                     Field("spi3w_en", bit_mask=0b0000001),  # Enable 3-wire SPI interface
                 ],
             ),
@@ -119,22 +98,22 @@ class BMP280(BaseDeviceAPI):
                 "calibration",
                 0x88,
                 fields=[
-                    Field("dig_t1", byte_index=(0, 1), encoder=UInt16),  # 0x88 0x89
-                    Field("dig_t2", byte_index=(2, 3), encoder=Int16),  # 0x8A 0x8B
-                    Field("dig_t3", byte_index=(4, 5), encoder=Int16),  # 0x8C 0x8D
-                    Field("dig_p1", byte_index=(6, 7), encoder=UInt16),  # 0x8E 0x8F
-                    Field("dig_p2", byte_index=(8, 9), encoder=Int16),  # 0x90 0x91
-                    Field("dig_p3", byte_index=(10, 11), encoder=Int16),  # 0x92 0x93
-                    Field("dig_p4", byte_index=(12, 13), encoder=Int16),  # 0x94 0x95
-                    Field("dig_p5", byte_index=(14, 15), encoder=Int16),  # 0x96 0x97
-                    Field("dig_p6", byte_index=(16, 17), encoder=Int16),  # 0x98 0x99
-                    Field("dig_p7", byte_index=(18, 19), encoder=Int16),  # 0x9A 0x9B
-                    Field("dig_p8", byte_index=(20, 21), encoder=Int16),  # 0x9C 0x9D
-                    Field("dig_p9", byte_index=(22, 23), encoder=Int16),  # 0x9E 0x9F
+                    Field("dig_t1", byte_index=(0, 1), encoder=UIntEncoder()),  # 0x88 0x89
+                    Field("dig_t2", byte_index=(2, 3), encoder=SIntEncoder()),  # 0x8A 0x8B
+                    Field("dig_t3", byte_index=(4, 5), encoder=SIntEncoder()),  # 0x8C 0x8D
+                    Field("dig_p1", byte_index=(6, 7), encoder=UIntEncoder()),  # 0x8E 0x8F
+                    Field("dig_p2", byte_index=(8, 9), encoder=SIntEncoder()),  # 0x90 0x91
+                    Field("dig_p3", byte_index=(10, 11), encoder=SIntEncoder()),  # 0x92 0x93
+                    Field("dig_p4", byte_index=(12, 13), encoder=SIntEncoder()),  # 0x94 0x95
+                    Field("dig_p5", byte_index=(14, 15), encoder=SIntEncoder()),  # 0x96 0x97
+                    Field("dig_p6", byte_index=(16, 17), encoder=SIntEncoder()),  # 0x98 0x99
+                    Field("dig_p7", byte_index=(18, 19), encoder=SIntEncoder()),  # 0x9A 0x9B
+                    Field("dig_p8", byte_index=(20, 21), encoder=SIntEncoder()),  # 0x9C 0x9D
+                    Field("dig_p9", byte_index=(22, 23), encoder=SIntEncoder()),  # 0x9E 0x9F
                 ],
                 n_bits=192,
                 read_only=True,
-                volatile=False,
+                non_volatile=True,
             ),
         ),
     )
@@ -145,16 +124,25 @@ class BMP280(BaseDeviceAPI):
 
 
 class ConfigAPI(BaseRegisterAPI):
-    def write(self, temp_standby_ms=4000, iir_filter_const=8, spi=False):
+    """config register API"""
+
+    def write(self, temp_standby_ms=4000, smoothing_const=8, disable_I2C=False):
         """write to the config register
 
         Args:
-            temp_standby_ms (int, optional): time (unit: ms) between temperature measurements in constant sampling mode. Possible values are [0.5, 62.5, 125, 250, 500, 1000, 2000, 4000]. Defaults to 4000.
-            iir_filter_const (int, optional): IIR filter coefficient. Higher -> smoother. Possible values are [0, 2, 4, 8, 16]. Defaults to 8.
-            spi (bool, optional): Enable SPI interface, which means none of this code will work. Defaults to False.
+            temp_standby_ms (int, optional): milliseconds between temperature measurements in constant sampling mode. Possible values are [0.5, 62.5, 125, 250, 500, 1000, 2000, 4000]. Defaults to 4000.
+            smoothing_const (int, optional): Smoothing filter (IIR) coefficient. Higher -> smoother. Possible values are [0, 2, 4, 8, 16]. Defaults to 8.
+            disable_I2C (bool, optional): Enable SPI interface, which disables I2C and means this codebase won't work. Defaults to False.
         """
-        raise NotImplementedError
+        field_map = {"t_sb": temp_standby_ms, "filter": smoothing_const, "spi3w_en": disable_I2C}
+        encoded = self._reg._field_values_to_raw_bytes(field_map)
+        self._parent_device._i2c_write(self._reg, encoded)
 
-    def read(self):
-        """read current config"""
-        raise NotImplementedError
+
+class ChipIDAPI(BaseRegisterAPI):
+    """chip_id register API"""
+
+    def write(
+        self,
+    ):
+        pass

@@ -67,6 +67,17 @@ class UIntEncoder(Encoder):
         return int.from_bytes(value, "big")
 
 
+class SIntEncoder(Encoder):
+    """interpret bytes as signed integer"""
+
+    def encode(self, value: int, field) -> bytes:
+        n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
+        return value.to_bytes(n_bytes, "big", signed=True)
+
+    def decode(self, value: bytes, field):
+        return int.from_bytes(value, "big", signed=True)
+
+
 class LookupTable(Encoder):
     """Encode with a dictionary of values"""
 
@@ -151,17 +162,17 @@ class Register(object):
         fields: Sequence[Field],
         n_bits: int = 8,
         read_only: bool = False,
-        volatile: bool = True,
+        non_volatile: bool = False,
     ) -> None:
         self.name = name
         self.address = address
         self.fields: Dict[str, Field] = {field.name: field for field in fields}
         self.n_bits = n_bits
         self.read_only = read_only
-        self.volatile = volatile
+        self.non_volatile = non_volatile
 
     def __repr__(self):
-        attrs = ["name", "address", "fields", "n_bits", "read_only", "volatile"]
+        attrs = ["name", "address", "fields", "n_bits", "read_only", "non_volatile"]
         attrs = {attr: getattr(self, attr) for attr in attrs}
         attrs["fields"] = list(attrs["fields"].values())
         sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
@@ -169,7 +180,7 @@ class Register(object):
 
     def __eq__(self, other):
         if other.__class__ is self.__class__:
-            comps = ["name", "address", "fields", "n_bits", "read_only", "volatile"]
+            comps = ["name", "address", "fields", "n_bits", "read_only", "non_volatile"]
             bools = [getattr(self, attr) == getattr(other, attr) for attr in comps]
             return all(bools)
         return NotImplemented
@@ -242,14 +253,14 @@ class BaseDeviceAPI(ABC):
     def hardware(cls) -> Device:  # abstract class attribute
         ...
 
-    def __init(self, i2c_interface: SMBus, address_pin_level: int = 0):
+    def __init__(self, i2c_interface: SMBus, address_pin_level: int = 0):
         self._i2c = i2c_interface
         self._address_level = address_pin_level
         # TODO: check if I need type(self) here:
         self.address = self.hardware.i2c_addresses[self._address_level]
 
-    def _i2c_write(self, register: Register, values: bytes):
-        self._i2c.write_i2c_block_data(self.address, register.address, values)
+    def _i2c_write(self, register: Register, values: bytes) -> None:
+        self._i2c.write_i2c_block_data(self.address, register.address, list(values))
 
     def _i2c_read(self, register: Register) -> bytes:
         return bytes(
@@ -265,12 +276,20 @@ class BaseDeviceAPI(ABC):
 class BaseRegisterAPI(ABC):
     """base class for registers contained in BaseDeviceAPI subclasses.
 
-    This class serves two purposes: 1) create a helpful API and 2) cache values.
+    The primary purpose of this class is to create a helpful, documented API for
+    writing to registers. The secondary purpose is to cache values.
     A BaseDeviceAPI that contains BaseRegisterAPI attributes has an API format like:
     sensor.register.write(field_1=x, field_2=y)
 
-    The .write() method should have a descriptive function signature and the docstring
-    should have key info from the datasheet, like arg descriptions and appropriate values.
+    The .write() method should have a descriptive function signature that translates obscure
+    raw field names to something intuitive. For example, a hardware field "t_sb" could be
+    called "milliseconds_between_temperature_measurements" or more likely "temp_sleep_ms"
+    with more info in the docstring.
+
+    Additionally, the .write() docstring should have key info from the datasheet
+    like arg descriptions and appropriate values, eg. converting the temperature
+    sleep durations from the above example to data sample rates (sleep duration
+    does not account for measurement time).
 
     Example API:
     bmp280.config.write(measurement_period_ms=250, iir_filter_const=8)
@@ -281,10 +300,16 @@ class BaseRegisterAPI(ABC):
         self._reg = self._parent_device.hardware.registers[reg_name]
         self._cached = {field.name: None for field in self._reg.fields.values()}
 
-    @abstractmethod
-    def write(self):
-        ...
+    def read(self, ignore_cache=False):
+        """read current values"""
+        has_been_read = all(self._cached.values())
+        if not self._reg.non_volatile and has_been_read and not ignore_cache:
+            return self._cached
+        raw_bytes = self._parent_device._i2c_read(self._reg)
+        field_values = self._reg._raw_bytes_to_field_values(raw_bytes)
+        self._cached = field_values
+        return field_values
 
     @abstractmethod
-    def read(self):
+    def write(self):
         ...
