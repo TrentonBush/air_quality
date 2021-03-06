@@ -84,7 +84,7 @@ class LookupTable(Encoder):
 
 
 class Field(object):
-    """Immutable properties of a field or flag in an i2c register"""
+    """Immutable properties of a field in an i2c register"""
 
     def __init__(
         self,
@@ -167,6 +167,13 @@ class Register(object):
         sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
         return f"{self.__class__.__name__}({sig})"
 
+    def __eq__(self, other):
+        if other.__class__ is self.__class__:
+            comps = ["name", "address", "fields", "n_bits", "read_only", "volatile"]
+            bools = [getattr(self, attr) == getattr(other, attr) for attr in comps]
+            return all(bools)
+        return NotImplemented
+
     def _raw_bytes_to_field_values(self, raw_bytes: bytes) -> Dict[str, Any]:
         out = {}
         for field in self.fields.values():
@@ -217,6 +224,13 @@ class Device(object):
         attrs["registers"] = list(attrs["registers"].values())
         sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
         return f"{self.__class__.__name__}({sig})"
+
+    def __eq__(self, other):
+        if other.__class__ is self.__class__:
+            comps = ["name", "chip_id", "i2c_addresses", "registers", "byte_order", "word_size"]
+            bools = [getattr(self, attr) == getattr(other, attr) for attr in comps]
+            return all(bools)
+        return NotImplemented
 
 
 class BaseDeviceAPI(ABC):
