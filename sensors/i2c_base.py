@@ -292,7 +292,7 @@ class BaseRegisterAPI(ABC):
     does not account for measurement time).
 
     Example API:
-    bmp280.config.write(measurement_period_ms=250, iir_filter_const=8)
+    bmp280.config.write(measurement_period_ms=250, smoothing_const=8)
     """
 
     def __init__(self, parent_device: BaseDeviceAPI, reg_name: str):

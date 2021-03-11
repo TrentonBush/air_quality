@@ -120,29 +120,143 @@ class BMP280(BaseDeviceAPI):
 
     def __init(self, i2c_interface: SMBus, address_pin_level: int = 0):
         super().__init__(i2c_interface, address_pin_level)
+        self.chip_id = ChipIDAPI(self, "chip_id")
+        self.reset = ResetAPI(self, "reset")
+        self.status = StatusAPI(self, "status")
+        self.ctrl_meas = CtrlMeasAPI(self, "ctrl_meas")
         self.config = ConfigAPI(self, "config")
-
-
-class ConfigAPI(BaseRegisterAPI):
-    """config register API"""
-
-    def write(self, temp_standby_ms=4000, smoothing_const=8, disable_I2C=False):
-        """write to the config register
-
-        Args:
-            temp_standby_ms (int, optional): milliseconds between temperature measurements in constant sampling mode. Possible values are [0.5, 62.5, 125, 250, 500, 1000, 2000, 4000]. Defaults to 4000.
-            smoothing_const (int, optional): Smoothing filter (IIR) coefficient. Higher -> smoother. Possible values are [0, 2, 4, 8, 16]. Defaults to 8.
-            disable_I2C (bool, optional): Enable SPI interface, which disables I2C and means this codebase won't work. Defaults to False.
-        """
-        field_map = {"t_sb": temp_standby_ms, "filter": smoothing_const, "spi3w_en": disable_I2C}
-        encoded = self._reg._field_values_to_raw_bytes(field_map)
-        self._parent_device._i2c_write(self._reg, encoded)
+        self.data = DataAPI(self, "data")
+        self.calibration = CalibrationAPI(self, "calibration")
 
 
 class ChipIDAPI(BaseRegisterAPI):
     """chip_id register API"""
 
+    def write(self):
+        """chip_id is read only"""
+        raise AttributeError("chip_id is read only")
+
+
+class ResetAPI(BaseRegisterAPI):
+    """reset register API"""
+
+    def write(self):
+        """Send the soft reset signal.
+
+        Resets the logic circuity and the register values. Sensor then enters sleep mode.
+        """
+        field_map = {"reset": 0xB6}
+        encoded = self._reg._field_values_to_raw_bytes(field_map)
+        self._parent_device._i2c_write(self._reg, encoded)
+
+
+class StatusAPI(BaseRegisterAPI):
+    """status register API"""
+
+    def write(self):
+        """status register is read only"""
+        raise AttributeError("status register is read only")
+
+
+class CtrlMeasAPI(BaseRegisterAPI):
+    """ctrl_meas register API"""
+
+    _modes = {"trigger", "interval", "sleep"}
+    _oversampling_values = {0, 1, 2, 4, 8, 16}
+
     def write(
-        self,
+        self, pressure_oversampling=16, temperature_oversampling=2, measurement_mode="trigger"
     ):
-        pass
+        """set data acquisition options
+
+        Per the datasheet:
+        Select pressure oversampling based on your desired resolution: 1x = 2.62 Pa, 2x = 1.31, 4x = 0.66, 8x = 0.33, 16x = 0.16
+        Temperature oversampling can be left at 1x unless you use 16x pressure oversampling, in which case use 2x. Any further temperature oversampling does NOT provide any benefit to pressure resolution.
+        Setting temperature or pressure oversampling to 0x skips that measurement. Output will be set to 0x80000
+
+        Measurement modes are:
+            sleep: take no measurements, reduce power consumption to minimum
+            trigger: take a measurement only when prompted by the host (by writing to this register), then go into sleep mode.
+            interval: take measurements every n milliseconds. Set n using the 'measurement_period_ms' arg of the config register.
+
+        Args:
+            pressure_oversampling (int, optional): number of pressure measurements to aggregate. Possible values are [0, 1, 2, 4, 8, 16]. Defaults to 16.
+            temperature_oversampling (int, optional): number of temperature measurements to aggregate. Possible values are [0, 1, 2, 4, 8, 16]. Defaults to 2.
+            measurement_mode (str, optional): one of ['trigger', 'interval', 'sleep']. See above documentation for descriptions. Defaults to 'trigger'.
+        """
+
+        if measurement_mode not in CtrlMeasAPI._modes:
+            raise ValueError(
+                f"measurement_mode must be one of {str(CtrlMeasAPI._modes)}. Given {measurement_mode}"
+            )
+        if pressure_oversampling not in CtrlMeasAPI._oversampling_values:
+            raise ValueError(
+                f"pressure_oversampling must be one of {str(CtrlMeasAPI._oversampling_values)}. Given {pressure_oversampling}"
+            )
+        if temperature_oversampling not in CtrlMeasAPI._oversampling_values:
+            raise ValueError(
+                f"temperature_oversampling must be one of {str(CtrlMeasAPI._oversampling_values)}. Given {temperature_oversampling}"
+            )
+
+        mode_map = {"trigger": "forced", "interval": "normal", "sleep": "sleep"}
+        measurement_mode = mode_map[measurement_mode]
+
+        field_map = {
+            "osrs_t": temperature_oversampling,
+            "osrs_p": pressure_oversampling,
+            "mode": measurement_mode,
+        }
+        encoded = self._reg._field_values_to_raw_bytes(field_map)
+        self._parent_device._i2c_write(self._reg, encoded)
+
+
+class ConfigAPI(BaseRegisterAPI):
+    """config register API"""
+
+    _periods = {0.5, 62.5, 125, 250, 500, 1000, 2000, 4000}
+    _filter_constants = {0, 2, 4, 8, 16}
+
+    def write(self, measurement_period_ms=4000, smoothing_const=8, disable_I2C=False):
+        """configure the sampling rate, filter, and interface options.
+        NOTE: writes to the config register may be ignored during measurements. Set to sleep mode (via ctrl_meas register) to guarantee successful writes.
+
+        Args:
+            measurement_period_ms (int, optional): milliseconds between measurements in interval sampling mode. Possible values are [0.5, 62.5, 125, 250, 500, 1000, 2000, 4000]. Defaults to 4000.
+            smoothing_const (int, optional): Smoothing filter (IIR) coefficient. Higher -> smoother. Possible values are [0, 2, 4, 8, 16]. Defaults to 8.
+            disable_I2C (bool, optional): Enable SPI interface, which disables I2C and means this codebase won't work. Defaults to False.
+        """
+        if measurement_period_ms not in ConfigAPI._periods:
+            raise ValueError(
+                f"measurement_period_ms must be one of {str(ConfigAPI._periods)}. Given {measurement_period_ms}"
+            )
+        if smoothing_const not in ConfigAPI._filter_constants:
+            raise ValueError(
+                f"smoothing_const must be one of {str(ConfigAPI._filter_constants)}. Given {smoothing_const}"
+            )
+
+        field_map = {
+            "t_sb": measurement_period_ms,
+            "filter": smoothing_const,
+            "spi3w_en": disable_I2C,
+        }
+        encoded = self._reg._field_values_to_raw_bytes(field_map)
+        self._parent_device._i2c_write(self._reg, encoded)
+
+
+class DataAPI(BaseRegisterAPI):
+    """data register API"""
+
+    def write(self):
+        """data register is read only"""
+        raise AttributeError("data register is read only")
+
+
+class CalibrationAPI(BaseRegisterAPI):
+    """calibration register API"""
+
+    def write(self):
+        """calibration register is read only"""
+        raise AttributeError("calibration register is read only")
+
+
+# TODO: implement cache updating for all RegisterAPI.write() methods
