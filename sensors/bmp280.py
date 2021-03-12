@@ -9,6 +9,7 @@ from .i2c_base import (
     LookupTable,
     BaseDeviceAPI,
     BaseRegisterAPI,
+    ReadOnlyRegisterAPI,
     UIntEncoder,
     SIntEncoder,
 )
@@ -120,25 +121,26 @@ class BMP280(BaseDeviceAPI):
 
     def __init(self, i2c_interface: SMBus, address_pin_level: int = 0):
         super().__init__(i2c_interface, address_pin_level)
-        self.chip_id = ChipIDAPI(self, "chip_id")
         self.reset = ResetAPI(self, "reset")
-        self.status = StatusAPI(self, "status")
         self.ctrl_meas = CtrlMeasAPI(self, "ctrl_meas")
         self.config = ConfigAPI(self, "config")
-        self.data = DataAPI(self, "data")
-        self.calibration = CalibrationAPI(self, "calibration")
+        # read-only registers
+        self.chip_id = ReadOnlyRegisterAPI(self, "chip_id")
+        self.status = ReadOnlyRegisterAPI(self, "status")
+        self.data = ReadOnlyRegisterAPI(self, "data")
+        self.calibration = ReadOnlyRegisterAPI(self, "calibration")
 
 
-class ChipIDAPI(BaseRegisterAPI):
-    """chip_id register API"""
-
-    def write(self):
-        """chip_id is read only"""
-        raise AttributeError("chip_id is read only")
-
-
-class ResetAPI(BaseRegisterAPI):
+class ResetAPI:  # don't inherit from BaseRegisterAPI because this is a weird register
     """reset register API"""
+
+    def __init__(self, parent_device: BaseDeviceAPI, reg_name: str):
+        self._parent_device = parent_device
+        self._reg = self._parent_device.hardware.registers[reg_name]
+
+    def read(self):
+        """reset register is write only"""
+        raise AttributeError("The 'reset' register is write only")
 
     def write(self):
         """Send the soft reset signal.
@@ -148,14 +150,6 @@ class ResetAPI(BaseRegisterAPI):
         field_map = {"reset": 0xB6}
         encoded = self._reg._field_values_to_raw_bytes(field_map)
         self._parent_device._i2c_write(self._reg, encoded)
-
-
-class StatusAPI(BaseRegisterAPI):
-    """status register API"""
-
-    def write(self):
-        """status register is read only"""
-        raise AttributeError("status register is read only")
 
 
 class CtrlMeasAPI(BaseRegisterAPI):
@@ -208,6 +202,7 @@ class CtrlMeasAPI(BaseRegisterAPI):
         }
         encoded = self._reg._field_values_to_raw_bytes(field_map)
         self._parent_device._i2c_write(self._reg, encoded)
+        self._cached.update(encoded)
 
 
 class ConfigAPI(BaseRegisterAPI):
@@ -241,22 +236,4 @@ class ConfigAPI(BaseRegisterAPI):
         }
         encoded = self._reg._field_values_to_raw_bytes(field_map)
         self._parent_device._i2c_write(self._reg, encoded)
-
-
-class DataAPI(BaseRegisterAPI):
-    """data register API"""
-
-    def write(self):
-        """data register is read only"""
-        raise AttributeError("data register is read only")
-
-
-class CalibrationAPI(BaseRegisterAPI):
-    """calibration register API"""
-
-    def write(self):
-        """calibration register is read only"""
-        raise AttributeError("calibration register is read only")
-
-
-# TODO: implement cache updating for all RegisterAPI.write() methods
+        self._cached.update(encoded)
