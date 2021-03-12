@@ -298,17 +298,16 @@ class BaseRegisterAPI(ABC):
     def __init__(self, parent_device: BaseDeviceAPI, reg_name: str):
         self._parent_device = parent_device
         self._reg = self._parent_device.hardware.registers[reg_name]
-        self._cached = {field.name: None for field in self._reg.fields.values()}
+        self._cached: Dict[str, Any] = {field.name: None for field in self._reg.fields.values()}
 
-    def read(self, ignore_cache=False):
-        """read current values"""
-        has_been_read = all(self._cached.values())  # check for None values
+    def read(self, ignore_cache=False) -> None:
+        """read current values; cache human-readable values"""
+        has_been_read = any((val is not None for val in self._cached.values()))
         if self._reg.non_volatile and has_been_read and not ignore_cache:
-            return self._cached
+            pass  # no need to re-read non-volatile registers
         raw_bytes = self._parent_device._i2c_read(self._reg)
         field_values = self._reg._raw_bytes_to_field_values(raw_bytes)
         self._cached = field_values
-        return field_values
 
     @property
     def values(self):
