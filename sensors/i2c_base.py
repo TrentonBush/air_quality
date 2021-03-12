@@ -283,12 +283,12 @@ class BaseRegisterAPI(ABC):
 
     The .write() method should have a descriptive function signature that translates obscure
     raw field names to something intuitive. For example, a hardware field "t_sb" could be
-    called "milliseconds_between_temperature_measurements" or more likely "temp_sleep_ms"
+    called "milliseconds_between_measurements" or "meas_period_ms"
     with more info in the docstring.
 
     Additionally, the .write() docstring should have key info from the datasheet
-    like arg descriptions and appropriate values, eg. converting the temperature
-    sleep durations from the above example to data sample rates (sleep duration
+    like arg descriptions and appropriate values, eg. converting the sleep
+    durations from the above example to data sample rates (sleep duration
     does not account for measurement time).
 
     Example API:
@@ -302,14 +302,24 @@ class BaseRegisterAPI(ABC):
 
     def read(self, ignore_cache=False):
         """read current values"""
-        has_been_read = all(self._cached.values())
-        if not self._reg.non_volatile and has_been_read and not ignore_cache:
+        has_been_read = all(self._cached.values())  # check for None values
+        if self._reg.non_volatile and has_been_read and not ignore_cache:
             return self._cached
         raw_bytes = self._parent_device._i2c_read(self._reg)
         field_values = self._reg._raw_bytes_to_field_values(raw_bytes)
         self._cached = field_values
         return field_values
 
+    @property
+    def values(self):
+        return self._cached
+
     @abstractmethod
     def write(self):
         ...
+
+
+class ReadOnlyRegisterAPI(BaseRegisterAPI):
+    def write(self):
+        """This register is read-only"""
+        raise AttributeError(f"The '{self._reg.name}' register is read only")
