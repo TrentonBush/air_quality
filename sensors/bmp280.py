@@ -1,5 +1,6 @@
 """Driver for the Bosch BMP280 pressure sensor"""
 from smbus2 import SMBus
+from typing import Dict
 
 from .i2c_base import (
     Device,
@@ -13,6 +14,40 @@ from .i2c_base import (
     UIntEncoder,
     SIntEncoder,
 )
+
+
+def _apply_calibration(temp_press: Dict[str, int], calib_param: Dict[str, int]) -> Dict[str, float]:
+    uncomp_temp = temp_press["temperature"]
+    uncomp_pres = temp_press["pressure"]
+
+    # The following expressions are hard to read - I copied and translated them from Bosch's C implementation.
+    # https://github.com/BoschSensortec/BMP280_driver/blob/master/bmp280.c#L553
+    # Thankfully they include test values to check that everything works. Trust the tests!
+
+    # temperature compensation
+    var1 = (uncomp_temp / 16384 - calib_param["dig_t1"] / 1024) * calib_param["dig_t2"]
+    var2 = uncomp_temp / 131072 - calib_param["dig_t1"] / 8192
+    var2 = var2 * var2 * calib_param["dig_t3"]
+    t_fine = var1 + var2
+    temperature = t_fine / 5120
+
+    # pressure compensation
+    var1 = t_fine / 2 - 64000
+    var2 = var1 * var1 * calib_param["dig_p6"] / 32768
+    var2 = var2 + var1 * calib_param["dig_p5"] * 2
+    var2 = var2 / 4 + calib_param["dig_p4"] * 65536
+    var1 = (calib_param["dig_p3"] * var1 * var1 / 524288 + calib_param["dig_p2"] * var1) / 524288
+    var1 = (1 + var1 / 32768) * calib_param["dig_p1"]
+    if var1 == 0:
+        raise ZeroDivisionError("var1 in pressure compensation formula is 0")
+
+    pressure = float(1048576 - uncomp_pres)
+    pressure = (pressure - var2 / 4096) * 6250 / var1
+    var1 = calib_param["dig_p9"] * pressure * pressure / 2147483648
+    var2 = pressure * calib_param["dig_p8"] / 32768
+    pressure = pressure + (var1 + var2 + calib_param["dig_p7"]) / 16
+
+    return {"temperature": temperature, "pressure": pressure}
 
 
 class BMP280(BaseDeviceAPI):
@@ -119,7 +154,7 @@ class BMP280(BaseDeviceAPI):
         ),
     )
 
-    def __init(self, i2c_interface: SMBus, address_pin_level: int = 0):
+    def __init__(self, i2c_interface: SMBus, address_pin_level: int = 0):
         super().__init__(i2c_interface, address_pin_level)
         self.reset = ResetAPI(self, "reset")
         self.ctrl_meas = CtrlMeasAPI(self, "ctrl_meas")
@@ -127,14 +162,18 @@ class BMP280(BaseDeviceAPI):
         # read-only registers
         self.chip_id = ReadOnlyRegisterAPI(self, "chip_id")
         self.status = ReadOnlyRegisterAPI(self, "status")
-        self.data = ReadOnlyRegisterAPI(self, "data")
         self.calibration = ReadOnlyRegisterAPI(self, "calibration")
+        self.data = DataAPI(self, "data")
 
 
-class ResetAPI:  # don't inherit from BaseRegisterAPI because this is a weird register
-    """reset register API"""
+class ResetAPI:
+    """reset register API
 
-    def __init__(self, parent_device: BaseDeviceAPI, reg_name: str):
+    Differs from other registers:
+     * write only
+     * no values to cache, so no self._cached or self.values attributes"""
+
+    def __init__(self, parent_device: BMP280, reg_name: str):
         self._parent_device = parent_device
         self._reg = self._parent_device.hardware.registers[reg_name]
 
@@ -150,6 +189,28 @@ class ResetAPI:  # don't inherit from BaseRegisterAPI because this is a weird re
         field_map = {"reset": 0xB6}
         encoded = self._reg._field_values_to_raw_bytes(field_map)
         self._parent_device._i2c_write(self._reg, encoded)
+
+
+class DataAPI(ReadOnlyRegisterAPI):
+    """data register API
+
+    Differs from other registers:
+     * read only
+     * overwrite .read method to apply calibration (same signature and return value)
+    """
+
+    # This subclass exists because calibration doesn't fit the standard Encoder model.
+    # Calibration relies on other register values. Encoders have no concept of other registers.
+    # I made an Encoder that worked (loaded it with calibration constants during sensor setup),
+    # but it relied on the order in which fields were defined (temp had to be defined before pressure).
+    # That felt too brittle/obscure, hence this class.
+    def read(self, ignore_cache=False) -> None:
+        """read current values and apply sensor calibration"""
+        super().read()  # temporarily set self._cached with machine-readable values
+        self._parent_device.calibration.read(ignore_cache=ignore_cache)  # type: ignore
+        calib = self._parent_device.calibration._cached  # type: ignore
+        field_values = _apply_calibration(self._cached, calib)  # convert to human-readable
+        self._cached = field_values
 
 
 class CtrlMeasAPI(BaseRegisterAPI):
@@ -193,16 +254,15 @@ class CtrlMeasAPI(BaseRegisterAPI):
             )
 
         mode_map = {"trigger": "forced", "interval": "normal", "sleep": "sleep"}
-        measurement_mode = mode_map[measurement_mode]
 
         field_map = {
             "osrs_t": temperature_oversampling,
             "osrs_p": pressure_oversampling,
-            "mode": measurement_mode,
+            "mode": mode_map[measurement_mode],
         }
+        self._cached.update(field_map)
         encoded = self._reg._field_values_to_raw_bytes(field_map)
         self._parent_device._i2c_write(self._reg, encoded)
-        self._cached.update(encoded)
 
 
 class ConfigAPI(BaseRegisterAPI):
@@ -234,6 +294,6 @@ class ConfigAPI(BaseRegisterAPI):
             "filter": smoothing_const,
             "spi3w_en": disable_I2C,
         }
+        self._cached.update(field_map)
         encoded = self._reg._field_values_to_raw_bytes(field_map)
         self._parent_device._i2c_write(self._reg, encoded)
-        self._cached.update(encoded)
