@@ -6,7 +6,6 @@ from .i2c_base import (
     Device,
     Register,
     Field,
-    Encoder,
     LookupTable,
     BaseDeviceAPI,
     BaseRegisterAPI,
@@ -16,9 +15,20 @@ from .i2c_base import (
 )
 
 
-def _apply_calibration(temp_press: Dict[str, int], calib_param: Dict[str, int]) -> Dict[str, float]:
-    uncomp_temp = temp_press["temperature"]
-    uncomp_pres = temp_press["pressure"]
+def _apply_calibration(
+    raw_adc_values: Dict[str, int], calib_param: Dict[str, int]
+) -> Dict[str, float]:
+    """convert raw ADC values of temperature and pressure to degrees C and Pascal, respectively.
+
+    Args:
+        raw_adc_values (Dict[str, int]): dict of raw ADC values, like: {'temperature': 123456, 'pressure': 123456}
+        calib_param (Dict[str, int]): dict of calibration constants, like {'dig_t1': val, ...}
+
+    Returns:
+        Dict[str, float]: dict of converted values, like: {'temperature': 20.42, 'pressure': 101325.4}
+    """
+    uncomp_temp = raw_adc_values["temperature"]
+    uncomp_pres = raw_adc_values["pressure"]
 
     # The following expressions are hard to read - I copied and translated them from Bosch's C implementation.
     # https://github.com/BoschSensortec/BMP280_driver/blob/master/bmp280.c#L553
@@ -38,8 +48,6 @@ def _apply_calibration(temp_press: Dict[str, int], calib_param: Dict[str, int]) 
     var2 = var2 / 4 + calib_param["dig_p4"] * 65536
     var1 = (calib_param["dig_p3"] * var1 * var1 / 524288 + calib_param["dig_p2"] * var1) / 524288
     var1 = (1 + var1 / 32768) * calib_param["dig_p1"]
-    if var1 == 0:
-        raise ZeroDivisionError("var1 in pressure compensation formula is 0")
 
     pressure = float(1048576 - uncomp_pres)
     pressure = (pressure - var2 / 4096) * 6250 / var1
@@ -115,7 +123,7 @@ class BMP280(BaseDeviceAPI):
                     Field(
                         "filter",  # time constant of the IIR filter
                         bit_mask=0b00011100,
-                        encoder=LookupTable({0: 0b000, 2: 0b001, 4: 0b010, 8: 0b011, 16: 0b100}),
+                        encoder=LookupTable({1: 0b000, 2: 0b001, 4: 0b010, 8: 0b011, 16: 0b100}),
                     ),
                     Field("spi3w_en", bit_mask=0b0000001),  # Enable 3-wire SPI interface
                 ],
@@ -269,16 +277,28 @@ class ConfigAPI(BaseRegisterAPI):
     """config register API"""
 
     _periods = {0.5, 62.5, 125, 250, 500, 1000, 2000, 4000}
-    _filter_constants = {0, 2, 4, 8, 16}
+    _filter_constants = {1, 2, 4, 8, 16}
 
-    def write(self, measurement_period_ms=4000, smoothing_const=8, disable_I2C=False):
+    def write(self, measurement_period_ms=4000, smoothing_const=1, disable_I2C=False):
         """configure the sampling rate, filter, and interface options.
         NOTE: writes to the config register may be ignored during measurements. Set to sleep mode (via ctrl_meas register) to guarantee successful writes.
 
+        measurement_period_ms does not include measurement time; a 500ms period does not sample at exactly 2 Hz.
+        To get total time per measurement, add approximately 1.5 ms plus 2 ms for each oversample;
+        eg. 8x pressure and 2x temp = 10 samples * 2ms per sample = 20 ms + 1.5 = 21.5 ms + measurement_period_ms
+
+        smoothing_const adjusts the weight of an IIR filter (expanding exponentially weighted moving average)
+        of the previous data acquisitions. smoothing_const=1 means no smoothing is applied.
+        It should probably only be used with the constant interval measurement mode.
+        The formula is:
+        output = (previous_value * (smoothing_const - 1) + new_value) / smoothing_const
+        The weight of the point at t-n is (1/const) * ((const - 1) / const)^n
+        To decay to a 2% weight, const=2 requires 4.6 samples, whereas const=16 requires 17.6
+
         Args:
-            measurement_period_ms (int, optional): milliseconds between measurements in interval sampling mode. Possible values are [0.5, 62.5, 125, 250, 500, 1000, 2000, 4000]. Defaults to 4000.
-            smoothing_const (int, optional): Smoothing filter (IIR) coefficient. Higher -> smoother. Possible values are [0, 2, 4, 8, 16]. Defaults to 8.
-            disable_I2C (bool, optional): Enable SPI interface, which disables I2C and means this codebase won't work. Defaults to False.
+            measurement_period_ms (int, optional): milliseconds between measurements in interval sampling mode. Possible values are [0.5, 62.5, 125, 250, 500, 1000, 2000, 4000]. For longer sampling intervals, set measurement_mode='trigger' in the ctrl_meas register. Defaults to 4000.
+            smoothing_const (int, optional): Smoothing filter (IIR) coefficient. Higher -> smoother. Possible values are [0, 2, 4, 8, 16]. Defaults to 1.
+            disable_I2C (bool, optional): Enable 3-wire SPI interface, which disables I2C and means this codebase won't work. Defaults to False.
         """
         if measurement_period_ms not in ConfigAPI._periods:
             raise ValueError(
