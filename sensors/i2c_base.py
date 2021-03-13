@@ -47,12 +47,12 @@ class Encoder(ABC):
 
     @abstractmethod
     def encode(self, value, field) -> bytes:
-        """encode human-readable value to machine value"""
+        """encode human-readable value to machine value (in device byte order)"""
         ...
 
     @abstractmethod
     def decode(self, value: bytes, field) -> Any:
-        """decode machine value to human-readable value"""
+        """decode machine value (in device byte order) to human-readable value"""
         ...
 
 
@@ -61,10 +61,10 @@ class UIntEncoder(Encoder):
 
     def encode(self, value: int, field) -> bytes:
         n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
-        return value.to_bytes(n_bytes, "big")
+        return value.to_bytes(n_bytes, field.byte_order)
 
     def decode(self, value: bytes, field):
-        return int.from_bytes(value, "big")
+        return int.from_bytes(value, field.byte_order)
 
 
 class Field(object):
@@ -77,25 +77,36 @@ class Field(object):
         bit_mask: Optional[int] = None,
         encoder: Encoder = UIntEncoder(),
         read_only: bool = False,
+        byte_order="big",
     ) -> None:
         self.name = name
         self.byte_index = byte_index
         self.bit_mask = bit_mask
         self.encoder = encoder
         self.read_only = read_only
+        self.byte_order = byte_order
         self._slice = slice(self.byte_index[0], self.byte_index[-1] + 1)
         self._shift = None
         if self.bit_mask is not None:
             self._shift = _count_trailing_zeros(self.bit_mask)
 
     def __repr__(self):
-        attrs = ["name", "byte_index", "bit_mask", "encoder", "read_only"]
+        attrs = ["name", "byte_index", "bit_mask", "encoder", "read_only", "byte_order"]
         sig = ", ".join(f"{attr}={getattr(self, attr)!r}" for attr in attrs)
         return f"{self.__class__.__name__}({sig})"
 
     def __eq__(self, other):
         if other.__class__ is self.__class__:
-            comps = ["name", "byte_index", "bit_mask", "encoder", "read_only", "_slice", "_shift"]
+            comps = [
+                "name",
+                "byte_index",
+                "bit_mask",
+                "encoder",
+                "read_only",
+                "byte_order",
+                "_slice",
+                "_shift",
+            ]
             bools = [getattr(self, attr) == getattr(other, attr) for attr in comps]
             return all(bools)
         return NotImplemented
@@ -103,24 +114,26 @@ class Field(object):
     def _decode_mask(self, raw_bytes: bytes) -> bytes:
         if self.bit_mask is None:
             return raw_bytes
-        out = int.from_bytes(raw_bytes, "big")  # always 'big' for masking
+        out = int.from_bytes(raw_bytes, self.byte_order)
         out &= self.bit_mask
         out >>= self._shift  # type: ignore    # _shift is None when bit_mask is None
-        return out.to_bytes(length=len(raw_bytes), byteorder="big")
+        return out.to_bytes(len(raw_bytes), self.byte_order)
 
     def _encode_mask(self, encoded_bytes: bytes) -> bytes:
         if self.bit_mask is None:
             return encoded_bytes
-        out = int.from_bytes(encoded_bytes, "big")
+        out = int.from_bytes(encoded_bytes, self.byte_order)
         out <<= self._shift  # type: ignore    # _shift is None when bit_mask is None
         n_bytes = self.byte_index[-1] - self.byte_index[0] + 1
-        return out.to_bytes(length=n_bytes, byteorder="big")
+        return out.to_bytes(n_bytes, self.byte_order)
 
     def encode(self, value: Any) -> bytes:
+        """convert human-readable value to raw bytes (in device byte order)"""
         out = self.encoder.encode(value, self)
         return self._encode_mask(out)
 
     def decode(self, value: bytes):
+        """convert raw bytes (in device byte order) to human-readable value"""
         value = self._decode_mask(value)
         return self.encoder.decode(value, self)
 
@@ -130,10 +143,10 @@ class SIntEncoder(Encoder):
 
     def encode(self, value: int, field: Field) -> bytes:
         n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
-        return value.to_bytes(n_bytes, "big", signed=True)
+        return value.to_bytes(n_bytes, field.byte_order, signed=True)
 
     def decode(self, value: bytes, field: Field):
-        return int.from_bytes(value, "big", signed=True)
+        return int.from_bytes(value, field.byte_order, signed=True)
 
 
 class LookupTable(Encoder):
@@ -145,10 +158,10 @@ class LookupTable(Encoder):
     def encode(self, value: Any, field: Field) -> bytes:
         value = self.lookup_table[value]
         n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
-        return value.to_bytes(n_bytes, "big", signed=True)
+        return value.to_bytes(n_bytes, field.byte_order, signed=True)
 
     def decode(self, value: bytes, field: Field) -> int:
-        int_val = int.from_bytes(value, "big")
+        int_val = int.from_bytes(value, field.byte_order)
         for k, v in self.lookup_table.items():
             if v == int_val:
                 return k

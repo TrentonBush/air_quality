@@ -142,18 +142,32 @@ class BMP280(BaseDeviceAPI):
                 "calibration",
                 0x88,
                 fields=[
-                    Field("dig_t1", byte_index=(0, 1), encoder=UIntEncoder()),  # 0x88 0x89
-                    Field("dig_t2", byte_index=(2, 3), encoder=SIntEncoder()),  # 0x8A 0x8B
-                    Field("dig_t3", byte_index=(4, 5), encoder=SIntEncoder()),  # 0x8C 0x8D
-                    Field("dig_p1", byte_index=(6, 7), encoder=UIntEncoder()),  # 0x8E 0x8F
-                    Field("dig_p2", byte_index=(8, 9), encoder=SIntEncoder()),  # 0x90 0x91
-                    Field("dig_p3", byte_index=(10, 11), encoder=SIntEncoder()),  # 0x92 0x93
-                    Field("dig_p4", byte_index=(12, 13), encoder=SIntEncoder()),  # 0x94 0x95
-                    Field("dig_p5", byte_index=(14, 15), encoder=SIntEncoder()),  # 0x96 0x97
-                    Field("dig_p6", byte_index=(16, 17), encoder=SIntEncoder()),  # 0x98 0x99
-                    Field("dig_p7", byte_index=(18, 19), encoder=SIntEncoder()),  # 0x9A 0x9B
-                    Field("dig_p8", byte_index=(20, 21), encoder=SIntEncoder()),  # 0x9C 0x9D
-                    Field("dig_p9", byte_index=(22, 23), encoder=SIntEncoder()),  # 0x9E 0x9F
+                    Field("dig_t1", byte_index=(0, 1), encoder=UIntEncoder(), byte_order="little"),
+                    Field("dig_t2", byte_index=(2, 3), encoder=SIntEncoder(), byte_order="little"),
+                    Field("dig_t3", byte_index=(4, 5), encoder=SIntEncoder(), byte_order="little"),
+                    Field("dig_p1", byte_index=(6, 7), encoder=UIntEncoder(), byte_order="little"),
+                    Field("dig_p2", byte_index=(8, 9), encoder=SIntEncoder(), byte_order="little"),
+                    Field(
+                        "dig_p3", byte_index=(10, 11), encoder=SIntEncoder(), byte_order="little"
+                    ),
+                    Field(
+                        "dig_p4", byte_index=(12, 13), encoder=SIntEncoder(), byte_order="little"
+                    ),
+                    Field(
+                        "dig_p5", byte_index=(14, 15), encoder=SIntEncoder(), byte_order="little"
+                    ),
+                    Field(
+                        "dig_p6", byte_index=(16, 17), encoder=SIntEncoder(), byte_order="little"
+                    ),
+                    Field(
+                        "dig_p7", byte_index=(18, 19), encoder=SIntEncoder(), byte_order="little"
+                    ),
+                    Field(
+                        "dig_p8", byte_index=(20, 21), encoder=SIntEncoder(), byte_order="little"
+                    ),
+                    Field(
+                        "dig_p9", byte_index=(22, 23), encoder=SIntEncoder(), byte_order="little"
+                    ),
                 ],
                 n_bits=192,
                 read_only=True,
