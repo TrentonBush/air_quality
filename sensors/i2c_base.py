@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Optional, Any, Sequence
+from typing import Dict, Tuple, Optional, Any, Sequence, List
 from collections.abc import Mapping
 from collections import defaultdict
 from functools import reduce
@@ -67,33 +67,6 @@ class UIntEncoder(Encoder):
         return int.from_bytes(value, "big")
 
 
-class SIntEncoder(Encoder):
-    """interpret bytes as signed integer"""
-
-    def encode(self, value: int, field) -> bytes:
-        n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
-        return value.to_bytes(n_bytes, "big", signed=True)
-
-    def decode(self, value: bytes, field):
-        return int.from_bytes(value, "big", signed=True)
-
-
-class LookupTable(Encoder):
-    """Encode with a dictionary of values"""
-
-    def __init__(self, lookup_table: dict):
-        self.lookup_table = lookup_table
-
-    def encode(self, value, field):
-        return self.lookup_table[value]
-
-    def decode(self, value, field):
-        for k, v in self.lookup_table.items():
-            if v == value:
-                return k
-        raise ValueError(f"{value} not in lookup table")
-
-
 class Field(object):
     """Immutable properties of a field in an i2c register"""
 
@@ -150,6 +123,36 @@ class Field(object):
     def decode(self, value: bytes):
         value = self._decode_mask(value)
         return self.encoder.decode(value, self)
+
+
+class SIntEncoder(Encoder):
+    """interpret bytes as signed integer"""
+
+    def encode(self, value: int, field: Field) -> bytes:
+        n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
+        return value.to_bytes(n_bytes, "big", signed=True)
+
+    def decode(self, value: bytes, field: Field):
+        return int.from_bytes(value, "big", signed=True)
+
+
+class LookupTable(Encoder):
+    """Encode with a dictionary of values"""
+
+    def __init__(self, lookup_table: Dict[Any, int]):
+        self.lookup_table = lookup_table
+
+    def encode(self, value: int, field: Field) -> bytes:
+        value = self.lookup_table[value]
+        n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
+        return value.to_bytes(n_bytes, "big", signed=True)
+
+    def decode(self, value: bytes, field: Field) -> int:
+        value = int.from_bytes(value, "big")
+        for k, v in self.lookup_table.items():
+            if v == value:
+                return k
+        raise ValueError(f"{value} not in lookup table")
 
 
 class Register(object):
@@ -247,10 +250,12 @@ class Device(object):
 class BaseDeviceAPI(ABC):
     """base class for making APIs for an i2c hardware device"""
 
+    # abstract class attribute. Syntax via StackOverflow
+    # https://stackoverflow.com/questions/2736255/abstract-attributes-in-python/53417582#53417582
     @property
     @classmethod
     @abstractmethod
-    def hardware(cls) -> Device:  # abstract class attribute
+    def hardware(cls) -> Device:
         ...
 
     def __init__(self, i2c_interface: SMBus, address_pin_level: int = 0):
@@ -322,3 +327,21 @@ class ReadOnlyRegisterAPI(BaseRegisterAPI):
     def write(self):
         """This register is read-only"""
         raise AttributeError(f"The '{self._reg.name}' register is read only")
+
+
+class MockSMBus:
+    def __init__(self, mocked_registers: Dict[int, int]):
+        self.regs = mocked_registers
+
+    def write_i2c_block_data(
+        self, i2c_address: int, register_address: int, values: List[int]
+    ) -> None:
+        addresses = range(register_address, register_address + len(values))
+        for i, address in enumerate(addresses):
+            self.regs[address] = values[i]
+
+    def read_i2c_block_data(
+        self, i2c_address: int, register_address: int, n_bytes: int
+    ) -> List[int]:
+        addresses = range(register_address, register_address + n_bytes)
+        return [self.regs[address] for address in addresses]
