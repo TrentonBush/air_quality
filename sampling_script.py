@@ -22,6 +22,6 @@ while True:
     start = datetime.now()
     bmp.data.read()
     end = datetime.now()
-    out = f"Temp [°C]: {bmp.data.values['temperature']}\t\t Press [Pa]: {bmp.data.values['pressure']}\t\t Duration: {end - start}"
+    out = f"Temp [°C]: {bmp.data.values['temperature']:.4f}\t\t Press [Pa]: {bmp.data.values['pressure']:.3f}\t\t Duration [ms]: {((end - start).total_seconds() / 1000):.2f}"
     print(out)
     sleep(4.1)
