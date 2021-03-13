@@ -6,22 +6,31 @@ from datetime import datetime
 from sensors.bmp280 import BMP280
 
 
-i2c_path = Path("dev/iotty03")
+i2c_path = Path("/dev/i2c-1")
 assert i2c_path.exists()
 
 i2c_interface = SMBus(str(i2c_path))
 bmp = BMP280(i2c_interface)
 
 # config
-bmp.chip_id.read()
-bmp.calibration.read()
-bmp.ctrl_meas.write(measurement_mode="interval")
+bmp.reset.write()
+bmp.config.write(measurement_period_ms=1000, smoothing_const=2, disable_I2C=False)
+bmp.ctrl_meas.write(
+    pressure_oversampling=16, temperature_oversampling=2, measurement_mode="trigger"
+)
 
 # sample
 while True:
     start = datetime.now()
-    bmp.data.read()
+    bmp.ctrl_meas.write(
+        pressure_oversampling=16, temperature_oversampling=2, measurement_mode="trigger"
+    )
+    bmp.status.read()
+    while bmp.status.values["measuring"]:
+        bmp.status.read()
+        sleep(0.001)
     end = datetime.now()
-    out = f"Temp [°C]: {bmp.data.values['temperature']:.4f}\t\t Press [Pa]: {bmp.data.values['pressure']:.3f}\t\t Duration [ms]: {((end - start).total_seconds() / 1000):.2f}"
+    bmp.data.read()
+    out = f"Temp [°C]: {bmp.data.values['temperature']:.4f} \t Press [Pa]: {bmp.data.values['pressure']:.3f} \t Duration [ms]: {(end - start).total_seconds() * 1000}"
     print(out)
-    sleep(4.1)
+    sleep(1.1)
