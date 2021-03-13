@@ -142,17 +142,17 @@ class LookupTable(Encoder):
     def __init__(self, lookup_table: Dict[Any, int]):
         self.lookup_table = lookup_table
 
-    def encode(self, value: int, field: Field) -> bytes:
+    def encode(self, value: Any, field: Field) -> bytes:
         value = self.lookup_table[value]
         n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
         return value.to_bytes(n_bytes, "big", signed=True)
 
     def decode(self, value: bytes, field: Field) -> int:
-        value = int.from_bytes(value, "big")
+        int_val = int.from_bytes(value, "big")
         for k, v in self.lookup_table.items():
-            if v == value:
+            if v == int_val:
                 return k
-        raise ValueError(f"{value} not in lookup table")
+        raise ValueError(f"{int_val} not in lookup table")
 
 
 class Register(object):
