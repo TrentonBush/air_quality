@@ -7,10 +7,10 @@ from sensors.i2c_base import MockSMBus, Register, Field
 def mocked_BMP280():
     # calibration and data values are same as in test__apply_calibration
     # converted with:
-    # {k: f"{val.to_bytes(2, 'big', signed=True).hex()}"
+    # {k: f"{val.to_bytes(2, 'little', signed=True).hex()}"
     #   for k, val in calib.items() if val < 1<<15}
     # and:
-    # {k: f"{val.to_bytes(2, 'big').hex()}"
+    # {k: f"{val.to_bytes(2, 'little').hex()}"
     #   for k, val in calib.items() if val > 1<<15}
 
     # temp and press must be bit shifted << 4
@@ -27,30 +27,30 @@ def mocked_BMP280():
         0xFA: 0x7E,  # data.temperature, byte_0
         0xFB: 0xED,  # data.temperature, byte_1
         0xFC: 0x00,  # data.temperature, byte_2
-        0x88: 0x6B,  # calibration.dig_t1, byte_0
-        0x89: 0x70,  # calibration.dig_t1, byte_1
-        0x8A: 0x67,  # calibration.dig_t2, byte_0
-        0x8B: 0x43,  # calibration.dig_t2, byte_1
-        0x8C: 0xFC,  # calibration.dig_t3, byte_0
-        0x8D: 0x18,  # calibration.dig_t3, byte_1
-        0x8E: 0x8E,  # calibration.dig_p1, byte_0
-        0x8F: 0x7D,  # calibration.dig_p1, byte_1
-        0x90: 0xD6,  # calibration.dig_p2, byte_0
-        0x91: 0x43,  # calibration.dig_p2, byte_1
-        0x92: 0x0B,  # calibration.dig_p3, byte_0
-        0x93: 0xD0,  # calibration.dig_p3, byte_1
-        0x94: 0x0B,  # calibration.dig_p4, byte_0
-        0x95: 0x27,  # calibration.dig_p4, byte_1
-        0x96: 0x00,  # calibration.dig_p5, byte_0
-        0x97: 0x8C,  # calibration.dig_p5, byte_1
-        0x98: 0xFF,  # calibration.dig_p6, byte_0
-        0x99: 0xF9,  # calibration.dig_p6, byte_1
-        0x9A: 0x3C,  # calibration.dig_p7, byte_0
-        0x9B: 0x8C,  # calibration.dig_p7, byte_1
-        0x9C: 0xC6,  # calibration.dig_p8, byte_0
-        0x9D: 0xF8,  # calibration.dig_p8, byte_1
-        0x9E: 0x17,  # calibration.dig_p9, byte_0
-        0x9F: 0x70,  # calibration.dig_p9, byte_1
+        0x88: 0x70,  # calibration.dig_t1, byte_0
+        0x89: 0x6B,  # calibration.dig_t1, byte_1
+        0x8A: 0x43,  # calibration.dig_t2, byte_0
+        0x8B: 0x67,  # calibration.dig_t2, byte_1
+        0x8C: 0x18,  # calibration.dig_t3, byte_0
+        0x8D: 0xFC,  # calibration.dig_t3, byte_1
+        0x8E: 0x7D,  # calibration.dig_p1, byte_0
+        0x8F: 0x8E,  # calibration.dig_p1, byte_1
+        0x90: 0x43,  # calibration.dig_p2, byte_0
+        0x91: 0xD6,  # calibration.dig_p2, byte_1
+        0x92: 0xD0,  # calibration.dig_p3, byte_0
+        0x93: 0x0B,  # calibration.dig_p3, byte_1
+        0x94: 0x27,  # calibration.dig_p4, byte_0
+        0x95: 0x0B,  # calibration.dig_p4, byte_1
+        0x96: 0x8C,  # calibration.dig_p5, byte_0
+        0x97: 0x00,  # calibration.dig_p5, byte_1
+        0x98: 0xF9,  # calibration.dig_p6, byte_0
+        0x99: 0xFF,  # calibration.dig_p6, byte_1
+        0x9A: 0x8C,  # calibration.dig_p7, byte_0
+        0x9B: 0x3C,  # calibration.dig_p7, byte_1
+        0x9C: 0xF8,  # calibration.dig_p8, byte_0
+        0x9D: 0xC6,  # calibration.dig_p8, byte_1
+        0x9E: 0x70,  # calibration.dig_p9, byte_0
+        0x9F: 0x17,  # calibration.dig_p9, byte_1
     }
     smb = MockSMBus(registers)
     yield BMP280(smb)
