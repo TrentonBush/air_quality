@@ -125,15 +125,15 @@ class BMP280(BaseDeviceAPI):
                         bit_mask=0b00011100,
                         encoder=LookupTable({1: 0b000, 2: 0b001, 4: 0b010, 8: 0b011, 16: 0b100}),
                     ),
-                    Field("spi3w_en", bit_mask=0b0000001),  # Enable 3-wire SPI interface
+                    Field("spi3w_en", bit_mask=0b00000001),  # Enable 3-wire SPI interface
                 ],
             ),
             Register(
                 "data",
                 0xF7,
                 fields=[
-                    Field("temperature", byte_index=(3, 5), bit_mask=0xFFFFF0),
-                    Field("pressure", byte_index=(0, 2), bit_mask=0xFFFFF0),
+                    Field("pressure", byte_index=(0, 1, 2), bit_mask=0xFFFFF0),
+                    Field("temperature", byte_index=(3, 4, 5), bit_mask=0xFFFFF0),
                 ],
                 n_bits=48,
                 read_only=True,
@@ -203,7 +203,7 @@ class DataAPI(ReadOnlyRegisterAPI):
     """data register API
 
     Differs from other registers:
-     * read only
+     * read only, but:
      * overwrite .read method to apply calibration (same signature and return value)
     """
 
