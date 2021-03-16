@@ -1,0 +1,11 @@
+[Unit]
+Description=Raspberry Pi data logging service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/code/air_quality_drivers
+ExecStart=/home/ubuntu/miniforge3/envs/rpi/bin/python3 sampling_script.py
+
+[Install]
+WantedBy=default.target
