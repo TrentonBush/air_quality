@@ -3,3 +3,6 @@
 
 # external requirements
 smbus2
+psycopg2
+typer
+dotenv
