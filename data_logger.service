@@ -6,6 +6,8 @@ After=network.target
 Type=simple
 WorkingDirectory=/home/ubuntu/code/air_quality_drivers
 ExecStart=/home/ubuntu/miniforge3/envs/rpi/bin/python3 sampling_script.py
+Restart=always
+RestartSec=1
 
 [Install]
 WantedBy=default.target
