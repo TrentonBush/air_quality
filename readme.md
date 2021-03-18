@@ -7,18 +7,21 @@ This project consists of three parts:
 3. Live dashboard of KPIs, time series, and ad-hoc queries via Grafana.
 
 This setup runs on a Raspberry Pi 4 running Ubuntu 20.04 (aarch64/arm64).
+<img src="docs/images/sensors.jpg" width=50% height=50% alt="picture of RPi and sensors" title="The little monster and its sensors">
 
-## What I Learned:
+## What I Learned
 
 ## Linux ARM64 support is still hard to come by
 
 Linux ARM64 (aka aarch64) might be the future, but it certainly isn't the present. ARM64 was a pain point because most software is not available pre-built for this architecture, so I had to build from source or find alternatives. Basic stuff like PgAdmin, TimescaleDB, and Anaconda were not available through apt or PPAs. Pip installing python libraries was slow for the same reason: few binary wheels were pre-built, so they had to build at install time. Some builds failed until I found the right compilers.
 
+<img src="docs/images/arm64.png" width=75% height=75% alt="screenshot of installers with no arm64 version">
+
 This wasn't a deal-breaker but I wouldn't use aarch64 again without a compelling reason to do so, at least until ARM market share grows and support improves.
 
-## Sensor hardware is surprisingly configurable - and so are the measurements
+## Sensor hardware is surprisingly configurable - and so are their outputs
 
-This configurability is a double-edged sword because it can have significant impacts on the reported measurements. Configuration must be documented at minimum, and preferably included in the user feedback process.
+This configurability is a double-edged sword because it can have significant impacts on the reported measurements, as I'll explain below. That impact means the configuration must be documented at minimum, and preferably included in the user feedback process.
 
 ### Sensors themselves do edge computing
 
@@ -34,7 +37,7 @@ I can change the reported measurements from my temperature sensor by 0.2 °C jus
 
 Here are the physics of why this happens. The sensor contains a resistor whose resistance changes with temperature in a known way. By passing current through that resistor and measuring the resistance, the sensor can calculate temperature. But there is a problem here: passing current through a resistor produces heat. Thus the act of measurement changes the temperature of the thing being measured! Again, I thought this complexity was accounted for by the OEM, whether in device design or calibration factors or something. And I'm sure it is to some extent. But not entirely!
 
-The temperature sensor I used gives you the option of oversampling - taking the average of a burst of up to 16 measurements over a few milliseconds. This reduces variance by averaging out random fluctuations. But it increases bias by dumping 16x more heat into the sensor. Which do the end users of the data prefer?
+The temperature sensor I used gives you the option of oversampling - taking the average of a burst of up to 16 measurements over a few milliseconds. This reduces variance by averaging out random fluctuations. But it increases bias by dumping 16x more heat into the sensor, producing the aforementioned 0.2 °C temp rise. Which option do the end users of the data prefer?
 
 ## TimescaleDB is nifty for time series (surprise!)
 
