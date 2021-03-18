@@ -102,9 +102,10 @@ def test_mocked_bmp280_raw_adc_values(mocked_BMP280, sample_calib_data):
 
 
 def test__apply_calibration__datasheet_values(sample_calib_data):
+    """tolerance: 1/2 unit in the last place"""
     calib, raw_adc_vals, expected = sample_calib_data
     actual = _apply_calibration(raw_adc_vals, calib)
-    assert actual == pytest.approx(expected, abs=1e-2)
+    assert actual == pytest.approx(expected, abs=5e-3)
 
 
 def test_BMP280__i2c_read(mocked_BMP280):
@@ -150,7 +151,7 @@ def test_BMP280_Data_read(mocked_BMP280, sample_calib_data):
     bmp = mocked_BMP280
     bmp.data.read()
     actual = bmp.data.values
-    assert actual == pytest.approx(expected, abs=1e-2)
+    assert actual == pytest.approx(expected, abs=5e-3)
 
 
 def test_BMP280_CtrlMeas_validation(mocked_BMP280):
