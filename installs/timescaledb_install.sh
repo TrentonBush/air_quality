@@ -17,5 +17,5 @@ sudo -i -u postgres
 psql -d postgres -c "SHOW config_file;"
 echo "NOT DONE! In the above config file, uncomment the line: shared_preload_libraries = 'timescaledb'"
 # it was: /etc/postgresql/12/main/postgresql.conf
-echo "example: nano /etc/postgresql/12/main/postgresql.conf"
+echo "example: sudo nano /etc/postgresql/12/main/postgresql.conf"
 echo "then restart postgres: sudo systemctl restart postgresql.service"
