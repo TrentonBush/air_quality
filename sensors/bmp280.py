@@ -18,7 +18,11 @@ from .i2c_base import (
 def _apply_calibration(
     raw_adc_values: Dict[str, int], calib_param: Dict[str, int]
 ) -> Dict[str, float]:
-    """convert raw ADC values of temperature and pressure to degrees C and Pascal, respectively.
+    """convert raw ADC values of temperature and pressure to °C and Pascal, respectively.
+
+    Note: I round off false precision. This reduces compressed storage size by 60% at
+    the cost of a small increase in *maximum* roundoff error of 0.19 units in the last place.
+    RMS noise, per the datasheet, is a factor of 20 to 130 times larger, depending on config.
 
     Args:
         raw_adc_values (Dict[str, int]): dict of raw ADC values, like: {'temperature': 123456, 'pressure': 123456}
@@ -30,9 +34,9 @@ def _apply_calibration(
     uncomp_temp = raw_adc_values["temperature"]
     uncomp_pres = raw_adc_values["pressure"]
 
-    # The following expressions are hard to read - I copied and translated them from Bosch's C implementation.
+    # The following expressions were translated from Bosch's C implementation.
     # https://github.com/BoschSensortec/BMP280_driver/blob/master/bmp280.c#L553
-    # Thankfully they include test values to check that everything works. Trust the tests!
+    # Thankfully they include test values to check that everything works.
 
     # temperature compensation
     var1 = (uncomp_temp / 16384 - calib_param["dig_t1"] / 1024) * calib_param["dig_t2"]
@@ -55,10 +59,31 @@ def _apply_calibration(
     var2 = pressure * calib_param["dig_p8"] / 32768
     pressure = pressure + (var1 + var2 + calib_param["dig_p7"]) / 16
 
+    # This sensor outputs only about 12 bits of information for temperature
+    # measurements, and 20 bits for pressure. Quite a bit less than the 64 bits of float.
+    # So for compressibility, I round off false precision.
+    # To justify this, you have to think like both a physical scientist (what is the
+    # precision of the measurement) and a computer scientist (what is the precision of the float)
+    # NOTE: roundoff error will increase by a factor of at most 1.017 due to this approximation.
+
+    # Derivation:
+    # Both temp and press have two decimal digits of precision, so 1/100.
+    # max error (in ULPs) is max([abs(round(i/100 * 2**N) / 2**N - i/100) / (1/100) for i in range(100)])
+    # Model with independent gaussians of ADC error with scale ~ 1 ULP and
+    # this rounding error w/ scale = 0.1875 ULP (N=8). Combine via (1**2 + 0.1875**2)**1/2 = 1.017 ULP
+    # Choose an N that gives the desired precision. I chose N=8 to be conservative.
+    def binary_round(value: float) -> float:
+        return round(value * 2 ** 8) / 2 ** 8
+
+    temperature = binary_round(temperature)
+    pressure = binary_round(pressure)
     return {"temperature": temperature, "pressure": pressure}
 
 
 class BMP280(BaseDeviceAPI):
+    """API for Bosch BMP280 temperature/pressure sensor"""
+
+    # hardware description
     hardware = Device(
         "bmp280",
         chip_id=0x58,
@@ -297,7 +322,7 @@ class ConfigAPI(BaseRegisterAPI):
         """configure the sampling rate, filter, and interface options.
         NOTE: writes to the config register may be ignored during measurements. Set to sleep mode (via ctrl_meas register) to guarantee successful writes.
 
-        measurement_period_ms does not include measurement time; a 500ms period does not sample at exactly 2 Hz.
+        measurement_period_ms does not include measurement time - a 500ms period does not sample at exactly 2 Hz.
         To get total time per measurement, add approximately 1.5 ms plus 2 ms for each oversample;
         eg. 8x pressure and 2x temp = 10 samples * 2ms per sample = 20 ms + 1.5 = 21.5 ms + measurement_period_ms
 
