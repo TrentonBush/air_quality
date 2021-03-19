@@ -1,6 +1,7 @@
 """Driver for the Bosch BMP280 pressure sensor"""
 from smbus2 import SMBus
 from typing import Dict
+from time import sleep
 
 from .i2c_base import (
     Device,
@@ -212,6 +213,20 @@ class BMP280(BaseDeviceAPI):
         self.calibration = ReadOnlyRegisterAPI(self, "calibration")
         self.data = DataAPI(self, "data")
 
+    @property
+    def measurement_duration(self) -> float:
+        """calculate max measurement duration, per datasheet. Used for sleep timing.
+
+        Returns:
+            float: duration, in seconds
+        """
+        smoothing = self.config.values["smoothing_const"] > 1
+        n_samples = (
+            self.ctrl_meas.values["pressure_oversampling"]
+            + self.ctrl_meas.values["temperature_oversampling"]
+        )
+        return (0.001 * smoothing + 0.002 * n_samples + 0.001) * 0.15
+
 
 class ResetAPI:
     """reset register API
@@ -236,6 +251,7 @@ class ResetAPI:
         field_map = {"reset": 0xB6}
         encoded = self._reg._field_values_to_raw_bytes(field_map)
         self._parent_device._i2c_write(self._reg, encoded)
+        sleep(0.002)  # 2 ms startup time
 
 
 class DataAPI(ReadOnlyRegisterAPI):
