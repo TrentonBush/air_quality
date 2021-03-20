@@ -63,7 +63,7 @@ class UIntEncoder(Encoder):
         n_bytes = field.byte_index[-1] - field.byte_index[0] + 1
         return value.to_bytes(n_bytes, field.byte_order)
 
-    def decode(self, value: bytes, field):
+    def decode(self, value: bytes, field) -> int:
         return int.from_bytes(value, field.byte_order)
 
 
@@ -236,17 +236,15 @@ class Device(object):
         i2c_addresses: Mapping[int, int],
         registers: Sequence[Register],
         byte_order: str = "big",
-        word_size: int = 8,
     ) -> None:
         self.name = name
         self.chip_id = chip_id
         self.i2c_addresses = i2c_addresses
         self.registers: Dict[str, Register] = {register.name: register for register in registers}
         self.byte_order = byte_order
-        self.word_size = word_size
 
     def __repr__(self):
-        attrs = ["name", "chip_id", "i2c_addresses", "registers", "byte_order", "word_size"]
+        attrs = ["name", "chip_id", "i2c_addresses", "registers", "byte_order"]
         attrs = {attr: getattr(self, attr) for attr in attrs}
         attrs["registers"] = list(attrs["registers"].values())
         sig = ", ".join(f"{attr}={val!r}" for attr, val in attrs.items())
@@ -254,7 +252,7 @@ class Device(object):
 
     def __eq__(self, other):
         if other.__class__ is self.__class__:
-            comps = ["name", "chip_id", "i2c_addresses", "registers", "byte_order", "word_size"]
+            comps = ["name", "chip_id", "i2c_addresses", "registers", "byte_order"]
             bools = [getattr(self, attr) == getattr(other, attr) for attr in comps]
             return all(bools)
         return NotImplemented
@@ -274,7 +272,6 @@ class BaseDeviceAPI(ABC):
     def __init__(self, i2c_interface: SMBus, address_pin_level: int = 0):
         self._i2c = i2c_interface
         self._address_level = address_pin_level
-        # TODO: check if I need type(self) here:
         self.address = self.hardware.i2c_addresses[self._address_level]
 
     def _i2c_write(self, register: Register, values: bytes) -> None:
@@ -285,8 +282,7 @@ class BaseDeviceAPI(ABC):
             self._i2c.read_i2c_block_data(
                 self.address,
                 register.address,
-                # TODO: check if I need type(self) here:
-                register.n_bits // self.hardware.word_size,
+                register.n_bits // 8,
             )
         )
 
@@ -343,18 +339,28 @@ class ReadOnlyRegisterAPI(BaseRegisterAPI):
 
 
 class MockSMBus:
-    def __init__(self, mocked_registers: Dict[int, int]):
+    def __init__(self, mocked_registers: Dict[int, int], word_size_bytes=1):
         self.regs = mocked_registers
+        self.word_size_bytes = word_size_bytes
 
     def write_i2c_block_data(
         self, i2c_address: int, register_address: int, values: List[int]
     ) -> None:
-        addresses = range(register_address, register_address + len(values))
+        addresses = range(register_address, register_address + len(values) // self.word_size_bytes)
         for i, address in enumerate(addresses):
-            self.regs[address] = values[i]
+            ints = values[self.word_size_bytes * i : self.word_size_bytes * (i + 1)]
+            final = int.from_bytes(bytes(ints), "big")
+            self.regs[address] = final
 
     def read_i2c_block_data(
         self, i2c_address: int, register_address: int, n_bytes: int
     ) -> List[int]:
-        addresses = range(register_address, register_address + n_bytes)
-        return [self.regs[address] for address in addresses]
+        addresses = range(register_address, register_address + n_bytes // self.word_size_bytes)
+        out: List[int] = []
+        for address in addresses:
+            out.extend(self.regs[address].to_bytes(self.word_size_bytes, "big"))
+        return out
+
+    def write_byte(self, i2c_address: int, value: int):
+        """used by HDC1080 as pointer write to trigger measurement. Doesn't actually flip any bits"""
+        pass
