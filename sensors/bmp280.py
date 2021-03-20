@@ -220,12 +220,9 @@ class BMP280(BaseDeviceAPI):
         Returns:
             float: duration, in seconds
         """
-        smoothing = self.config.values["smoothing_const"] > 1
-        n_samples = (
-            self.ctrl_meas.values["pressure_oversampling"]
-            + self.ctrl_meas.values["temperature_oversampling"]
-        )
-        return (0.001 * smoothing + 0.002 * n_samples + 0.001) * 0.15
+        smoothing = self.config.values["filter"] > 1
+        n_samples = self.ctrl_meas.values["osrs_p"] + self.ctrl_meas.values["osrs_t"]
+        return (0.001 * smoothing + 0.002 * n_samples + 0.001) * 1.15
 
 
 class ResetAPI:

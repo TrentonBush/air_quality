@@ -202,3 +202,18 @@ def test_BMP280_Config_write(mocked_BMP280):
     actual = bmp._i2c_read(bmp.hardware.registers["config"])
     actual = bmp.hardware.registers["config"]._raw_bytes_to_field_values(actual)
     assert actual == expected
+
+
+def test_BMP280_measurement_duration(mocked_BMP280):
+    bmp = mocked_BMP280
+    bmp.config.read()
+    bmp.ctrl_meas.read()
+    expected = (1 + 4 * 2 + 1) * 1.15 / 1000
+    actual = bmp.measurement_duration
+    assert actual == pytest.approx(expected)
+    # with typical values
+    bmp.config.write(smoothing_const=1)
+    bmp.ctrl_meas.write(temperature_oversampling=2, pressure_oversampling=16)
+    expected = (0 + 18 * 2 + 1) * 1.15 / 1000
+    actual = bmp.measurement_duration
+    assert actual == pytest.approx(expected)
