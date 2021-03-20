@@ -1,5 +1,10 @@
 """Driver for Texas Instruments HDC1080 temperature and humidity sensor"""
 from smbus2 import SMBus
+
+# iocl needed due to compatibility problem with SMBus.
+# I had to make a custom io function for the data registers
+# of this device. See HDC1080._i2c_read()
+from fcntl import ioctl
 from time import sleep
 
 from .i2c_base import (
@@ -70,7 +75,7 @@ class HDC1080(BaseDeviceAPI):
                 fields=(
                     Field("reset", bit_mask=0b10000000),
                     Field("heater_on", bit_mask=0b00100000),
-                    Field("mode", bit_mask=0b00010000),
+                    Field("measure_both", bit_mask=0b00010000),
                     Field("battery_low", bit_mask=0b00001000, read_only=True),
                     Field(
                         "temp_res_bits",
@@ -93,7 +98,7 @@ class HDC1080(BaseDeviceAPI):
                             }
                         ),
                     ),
-                    Field("reserved", byte_index=(1,), bit_mask=0),  # second byte must be null
+                    Field("reserved", byte_index=(1,)),  # second byte must be null
                 ),
                 n_bits=16,
             ),
@@ -104,9 +109,9 @@ class HDC1080(BaseDeviceAPI):
                 n_bits=16,
             ),
             Register(
-                "temp",
+                "temperature",
                 0x00,
-                fields=(Field("temp", byte_index=(0, 1), encoder=TemperatureEncoder()),),
+                fields=(Field("temperature", byte_index=(0, 1), encoder=TemperatureEncoder()),),
                 n_bits=16,
             ),
             # HDC1080 can measure only temp, only RH, or both at once.
@@ -115,18 +120,20 @@ class HDC1080(BaseDeviceAPI):
                 "data",
                 0x00,
                 fields=(
-                    Field("temp", byte_index=(0, 1), encoder=TemperatureEncoder()),
+                    Field("temperature", byte_index=(0, 1), encoder=TemperatureEncoder()),
                     Field("humidity", byte_index=(2, 3), encoder=HumidityEncoder()),
                 ),
                 n_bits=32,
             ),
         ),
-        word_size=16,
     )
 
     def __init__(self, i2c_interface: SMBus, address_pin_level: int = 0):
         super().__init__(i2c_interface, address_pin_level)
-        self._timings = {"temp": {14: 6.35, 11: 3.65}, "humidity": {14: 6.35, 11: 3.65, 8: 2.5}}
+        self._timings = {
+            "temperature": {14: 6.35, 11: 3.65},
+            "humidity": {14: 6.5, 11: 3.85, 8: 2.5},
+        }
         self.config = ConfigAPI(self, "config")
         # read only registers
         self.data = ReadOnlyRegisterAPI(self, "data")
@@ -136,6 +143,9 @@ class HDC1080(BaseDeviceAPI):
         self.manufacturer_id = ReadOnlyRegisterAPI(self, "manufacturer_id")
         self.device_id = ReadOnlyRegisterAPI(self, "device_id")
 
+        # these registers must have a 15 ms delay between address setting and reading
+        self._weird_registers = {"data", "temperature", "humidity"}
+
     @property
     def measurement_duration(self) -> float:
         """calculate measurement duration, per datasheet. Used for sleep timing.
@@ -143,9 +153,12 @@ class HDC1080(BaseDeviceAPI):
         Returns:
             float: duration, in seconds
         """
-        t_ms = self._timings["temp"][self.config.values["temp_res_bits"]]
-        rh_ms = self._timings["humidity"][self.config.values["rh_res_bits"]]
-        if self.config.values["mode"]:  # measure both temp and RH
+        try:
+            t_ms = self._timings["temperature"][self.config.values["temp_res_bits"]]
+            rh_ms = self._timings["humidity"][self.config.values["rh_res_bits"]]
+        except KeyError:  # registers not read yet, initialized with None
+            return 0.015
+        if self.config.values["measure_both"]:  # measure both temp and RH
             return (t_ms + rh_ms) / 1000 + 0.001
         return max(t_ms, rh_ms) / 1000 + 0.001
 
@@ -159,9 +172,37 @@ class HDC1080(BaseDeviceAPI):
         if humidity and not temperature:
             reg_addr = self.hardware.registers["humidity"].address
         else:
-            reg_addr = self.hardware.registers["temp"].address
+            reg_addr = self.hardware.registers["temperature"].address
         self._i2c.write_byte(self.address, reg_addr)
-        sleep(self.measurement_duration)
+
+    def _i2c_read(self, register: Register) -> bytes:
+        """overwrite due to weird timing requirements of HDC1080
+
+        Not directly compatible SMBus because it requires a 15ms sleep between
+        setting the address and reading from it. All SMBus functions couple those actions together.
+        """
+        if register.name not in self._weird_registers:
+            return super()._i2c_read(register)
+
+        # The following only applies to temperature and humidity registers
+        n_bytes = register.n_bits // 8
+        # pointer write triggers measurement
+        self._i2c.write_byte(self.address, register.address)
+        sleep(self.measurement_duration)  # wait for measurement
+
+        # manual read
+        I2C_SLAVE = 0x0703  # from uapi/linux/i2c-dev.h, via smbus2.py
+
+        def read():
+            with open(self._i2c.fd, mode="rb", closefd=False) as f:
+                ioctl(f, I2C_SLAVE, self.address)
+                return f.read(n_bytes)
+
+        try:
+            return read()
+        except OSError:
+            sleep(0.005)
+            return read()
 
 
 class ConfigAPI(BaseRegisterAPI):
@@ -212,21 +253,29 @@ class ConfigAPI(BaseRegisterAPI):
         """
         if temp_resolution_bits not in ConfigAPI._resolutions[1:]:
             raise ValueError(
-                f"temp_resolution_bits must be one of {str(ConfigAPI._resolutions[1:])}. Given {measurement_period_ms}"
+                f"temp_resolution_bits must be one of {str(ConfigAPI._resolutions[1:])}. Given {temp_resolution_bits}"
             )
         if humidity_resolution_bits not in ConfigAPI._resolutions:
             raise ValueError(
-                f"humidity_resolution_bits must be one of {str(ConfigAPI._resolutions)}. Given {smoothing_const}"
+                f"humidity_resolution_bits must be one of {str(ConfigAPI._resolutions)}. Given {humidity_resolution_bits}"
             )
         field_map = {
             "reset": soft_reset,
             "heater_on": heater_on,
             "temp_res_bits": temp_resolution_bits,
             "rh_res_bits": humidity_resolution_bits,
-            "mode": measure_both,
+            "measure_both": measure_both,
+            "reserved": 0x00,  # always null
+            "battery_low": False,  # read only
         }
         self._cached.update(field_map)
         encoded = self._reg._field_values_to_raw_bytes(self._cached)
         self._parent_device._i2c_write(self._reg, encoded)
         if soft_reset:
-            sleep(0.015)
+            sleep(0.015)  # max startup time, per datasheet
+
+
+class MockHDC1080(HDC1080):
+    def _i2c_read(self, register: Register) -> bytes:
+        # ugly hack to hardcode grandparent class but needed for mocking
+        return BaseDeviceAPI._i2c_read(self, register)
