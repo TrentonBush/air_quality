@@ -6,7 +6,9 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 CREATE TABLE IF NOT EXISTS sensor_data (
     time timestamptz NOT NULL,
     temp double precision,
-    press double precision
+    press double precision,
+    humidity double precision,
+    temp_hdc double precision
 );
 
 SELECT create_hypertable('sensor_data', 'time');
