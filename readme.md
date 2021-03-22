@@ -8,18 +8,16 @@
       - [Ad-hoc Queries: Grafana and others](#ad-hoc-queries-grafana-and-others)
       - [Data Visualization: Grafana](#data-visualization-grafana)
   - [The Code](#the-code)
-  - [What I Learned](#what-i-learned)
+- [What I Learned](#what-i-learned)
   - [Linux aarch64 support is still developing](#linux-aarch64-support-is-still-developing)
   - [Sensor hardware is surprisingly configurable - a double-edged sword for data consumers](#sensor-hardware-is-surprisingly-configurable---a-double-edged-sword-for-data-consumers)
-    - [Sensors themselves do edge computing](#sensors-themselves-do-edge-computing)
-    - [There are bias-variance tradeoffs in measurement itself](#there-are-bias-variance-tradeoffs-in-measurement-itself)
+  - [Sensors themselves do edge computing](#sensors-themselves-do-edge-computing)
+  - [There are bias-variance tradeoffs in measurement itself](#there-are-bias-variance-tradeoffs-in-measurement-itself)
   - [TimescaleDB is nifty for time series (surprise!)](#timescaledb-is-nifty-for-time-series-surprise)
 
-<img src="docs/images/smoke.jpg" width=40% alt="satellite image of smoke over the west coast">
+<img src="docs/images/smoke.jpg" width=70% alt="satellite image of smoke over the west coast">
 
 The west coast wildfire season prompts a lot of data reporting on outdoor air quality. Sensor networks like [purpleair.com](purpleair.com) provide impressive maps of outdoor air quality from local to continental scales. During these oppressive smoke events, health advocates advise to stay indoors. But how much better is indoor air quality? And what are the impacts of indoor activities like cooking, vacuuming, and just... breathing?
-
-<img src="docs/images/indoor_smoke.jpg" width=50% alt="smoke through the window">
 
 To answer these questions, I decided to set up sensors and log data.
 
@@ -41,7 +39,9 @@ Another leading time series database is InfluxDB, a No-SQL, tag-based data store
 
 #### Message Broker: None
 
-The most common IoT message protocol is MQTT, which uses a publish-subscribe model with persistent connections. Compared to an intermittant connection protocol like HTTP, MQTT spends more resources opening and closing a connection, but each transmitted message has far less overhead. MQTT is therefore preferable to HTTP when connections can be reused and data payloads contain multiple fields. Under these circumstances, which are common in IoT, MQTT delivers lower latency, lower bandwidth usage, and lower power consumption. All the major cloud providers offer MQTT-based products.
+The most common IoT message protocol is MQTT, which uses a publish-subscribe model with persistent connections. Compared to an intermittant connection protocol like HTTP, MQTT spends more resources opening and closing a connection, but each transmitted message has far less overhead. MQTT is therefore preferable to HTTP when connections can be reused and data payloads contain multiple fields.
+
+These conditions are common in IoT applications, where devices read multiple sensors and report data every few seconds. Under these circumstances, MQTT delivers lower latency, lower bandwidth usage, and lower power consumption. All the major cloud providers offer MQTT-based products.
 
 This particular project benefits from a central server (Raspberry Pi) that directly connects to sensor hardware, so the transport layer can be removed.
 
@@ -63,9 +63,9 @@ This project consists of four parts:
 4. Installation and configuration of all these parts, in ./makefile
 
 This setup runs on a Raspberry Pi 4 running Ubuntu 20.04 (aarch64/arm64).
-<img src="docs/images/sensors.jpg" width=50% height=50% alt="picture of RPi and sensors" title="The little monster and its sensors">
+<img src="docs/images/sensors.jpg" width=70% alt="picture of RPi and sensors" title="The little monster and its sensors">
 
-## What I Learned
+# What I Learned
 
 ## Linux aarch64 support is still developing
 
@@ -77,15 +77,17 @@ This wasn't a deal-breaker but I wouldn't use aarch64 again without a compelling
 
 ## Sensor hardware is surprisingly configurable - a double-edged sword for data consumers
 
-This configurability is a double-edged sword because it can have significant impacts on the reported measurements, as I'll explain below. That power means that the sensor configuration must be consistent and documented at a minimum, and preferably included in the user feedback process.
+Configurability is a double-edged sword because the same sensor model can output very different measurement values, depending on configuration. Are users aware of this?
 
-### Sensors themselves do edge computing
+Sensor configuration must be documented at a minimum, and preferably included in the user feedback process.
+
+## Sensors themselves do edge computing
 
 Perhaps naively, I thought reading a pressure sensor returned a single pressure measurement. But actually sensors can perform a surprising amount of post-processing on-chip. For example, my pressure sensor can aggregate up to 16 individual measurements in each reported value, or blend multiple measurements together with an IIR smoothing filter.
 
 Like all edge computing, this processing power can deliver greater value per bandwidth and per storage, but risks erasing key information by aggregating too early.
 
-### There are bias-variance tradeoffs in measurement itself
+## There are bias-variance tradeoffs in measurement itself
 
 I know metrology (the study of measurement) is a whole discipline, but I thought that when it came to individual sensors, all that complexity was already managed (or not) at the hardware level. I thought my only decision was to choose which device with which specs to buy. Not so. Take my resistive temperature sensor as an example.
 
