@@ -11,18 +11,16 @@ def mocked_HDC1080():
     registers = {
         # temperature: -40 °C, humidity: 0 %RH.
         # Concatenated to simulate burst read for .data register
-        0x00: 0x00000000,
-        0x01: 0x0000,  # humidity: 0 %RH
+        0x00: [0x00, 0x00, 0x00, 0x00],
+        0x01: [0x00, 0x00],  # humidity: 0 %RH
         # config: reset=False, heater_on=False, measure_both=True,
         # battery_low=True, temp_res_bits=14, rh_res_bits=14
-        0x02: 0x1800,
-        0xFB: 0x0303,  # serial_id MSBs
-        0xFC: 0x0202,  # serial_id middle bytes
-        0xFD: 0x0101,  # serial_id LSB and reserved byte
-        0xFE: 0x5449,  # manufacturer_id
-        0xFF: 0x1050,  # device_id
+        0x02: [0x18, 0x00],
+        0xFB: [0x03, 0x03, 0x02, 0x02, 0x01, 0x01],  # serial_id
+        0xFE: [0x54, 0x49],  # manufacturer_id
+        0xFF: [0x10, 0x50],  # device_id
     }
-    smb = MockSMBus(registers, word_size_bytes=2)
+    smb = MockSMBus(registers)
     yield MockHDC1080(smb)
 
 

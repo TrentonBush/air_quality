@@ -339,28 +339,19 @@ class ReadOnlyRegisterAPI(BaseRegisterAPI):
 
 
 class MockSMBus:
-    def __init__(self, mocked_registers: Dict[int, int], word_size_bytes=1):
+    def __init__(self, mocked_registers: Dict[int, List[int]]):
         self.regs = mocked_registers
-        self.word_size_bytes = word_size_bytes
 
     def write_i2c_block_data(
         self, i2c_address: int, register_address: int, values: List[int]
     ) -> None:
-        addresses = range(register_address, register_address + len(values) // self.word_size_bytes)
-        for i, address in enumerate(addresses):
-            ints = values[self.word_size_bytes * i : self.word_size_bytes * (i + 1)]
-            final = int.from_bytes(bytes(ints), "big")
-            self.regs[address] = final
+        self.regs[register_address] = values
 
     def read_i2c_block_data(
         self, i2c_address: int, register_address: int, n_bytes: int
     ) -> List[int]:
-        addresses = range(register_address, register_address + n_bytes // self.word_size_bytes)
-        out: List[int] = []
-        for address in addresses:
-            out.extend(self.regs[address].to_bytes(self.word_size_bytes, "big"))
-        return out
+        return self.regs[register_address]
 
-    def write_byte(self, i2c_address: int, value: int):
-        """used by HDC1080 as pointer write to trigger measurement. Doesn't actually flip any bits"""
-        pass
+    def write_byte(self, i2c_address: int, value: int) -> None:
+        """pointer write to trigger measurement. Doesn't actually flip any bits"""
+        self.regs[value]  # don't want key error

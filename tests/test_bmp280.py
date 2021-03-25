@@ -16,41 +16,26 @@ def mocked_BMP280():
     # temp and press must be bit shifted << 4
     # (519888 << 4).to_bytes(3, 'big').hex()
     registers = {
-        0xD0: 0x58,  # chip_id; id=0x58,
-        0xE0: 0x00,  # reset; reset,
-        0xF3: 0b00001001,  # status; measuring=True, im_update=True,
-        0xF4: 0b01001010,  # ctrl_meas; osrs_t=2, osrs_p=2, mode=forced,
-        0xF5: 0b10000100,  # config; t_sb=500, filter=2, spi3w_en=0,
-        0xF7: 0x65,  # data.pressure, byte_0
-        0xF8: 0x5A,  # data.pressure, byte_1
-        0xF9: 0xC0,  # data.pressure, byte_2
-        0xFA: 0x7E,  # data.temperature, byte_0
-        0xFB: 0xED,  # data.temperature, byte_1
-        0xFC: 0x00,  # data.temperature, byte_2
-        0x88: 0x70,  # calibration.dig_t1, byte_0
-        0x89: 0x6B,  # calibration.dig_t1, byte_1
-        0x8A: 0x43,  # calibration.dig_t2, byte_0
-        0x8B: 0x67,  # calibration.dig_t2, byte_1
-        0x8C: 0x18,  # calibration.dig_t3, byte_0
-        0x8D: 0xFC,  # calibration.dig_t3, byte_1
-        0x8E: 0x7D,  # calibration.dig_p1, byte_0
-        0x8F: 0x8E,  # calibration.dig_p1, byte_1
-        0x90: 0x43,  # calibration.dig_p2, byte_0
-        0x91: 0xD6,  # calibration.dig_p2, byte_1
-        0x92: 0xD0,  # calibration.dig_p3, byte_0
-        0x93: 0x0B,  # calibration.dig_p3, byte_1
-        0x94: 0x27,  # calibration.dig_p4, byte_0
-        0x95: 0x0B,  # calibration.dig_p4, byte_1
-        0x96: 0x8C,  # calibration.dig_p5, byte_0
-        0x97: 0x00,  # calibration.dig_p5, byte_1
-        0x98: 0xF9,  # calibration.dig_p6, byte_0
-        0x99: 0xFF,  # calibration.dig_p6, byte_1
-        0x9A: 0x8C,  # calibration.dig_p7, byte_0
-        0x9B: 0x3C,  # calibration.dig_p7, byte_1
-        0x9C: 0xF8,  # calibration.dig_p8, byte_0
-        0x9D: 0xC6,  # calibration.dig_p8, byte_1
-        0x9E: 0x70,  # calibration.dig_p9, byte_0
-        0x9F: 0x17,  # calibration.dig_p9, byte_1
+        0xD0: [0x58],  # chip_id; id=0x58,
+        0xE0: [0x00],  # reset; reset,
+        0xF3: [0b00001001],  # status; measuring=True, im_update=True,
+        0xF4: [0b01001010],  # ctrl_meas; osrs_t=2, osrs_p=2, mode=forced,
+        0xF5: [0b10000100],  # config; t_sb=500, filter=2, spi3w_en=0,
+        0xF7: [0x65, 0x5A, 0xC0, 0x7E, 0xED, 0x00],  # data
+        0x88: [
+            0x70, 0x6B,  # calibration.dig_t1
+            0x43, 0x67,  # calibration.dig_t2
+            0x18, 0xFC,  # calibration.dig_t3
+            0x7D, 0x8E,  # calibration.dig_p1
+            0x43, 0xD6,  # calibration.dig_p2
+            0xD0, 0x0B,  # calibration.dig_p3
+            0x27, 0x0B,  # calibration.dig_p4
+            0x8C, 0x00,  # calibration.dig_p5
+            0xF9, 0xFF,  # calibration.dig_p6
+            0x8C, 0x3C,  # calibration.dig_p7
+            0xF8, 0xC6,  # calibration.dig_p8
+            0x70, 0x17,  # calibration.dig_p9
+        ]
     }
     smb = MockSMBus(registers)
     yield BMP280(smb)
@@ -120,7 +105,7 @@ def test_BMP280__i2c_write(mocked_BMP280):
     bmp = mocked_BMP280
     reg = Register("chip_id", 0xD0, (Field("id"),))
     bmp._i2c_write(reg, b"\xFF")
-    expected = int.from_bytes(b"\xFF", "big")
+    expected = [int.from_bytes(b"\xFF", "big")]
     actual = bmp._i2c.regs[0xD0]
     assert actual == expected
 
