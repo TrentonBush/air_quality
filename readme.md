@@ -51,7 +51,9 @@ Thanks to the ubiquity of PostgreSQL, there are many ways to query the database.
 
 #### Data Visualization: Grafana
 
-Grafana is a dashboarding tool that can connect to a wide array of data sources, including TimescaleDB. Though limited in scope to simple monitoring tasks, there are many community plugins to extend Grafana's functionality. The dashboards are fully responsive and look nice on phone, tablet, and computer screens.
+Grafana is a dashboarding tool that can connect to a wide array of data sources, including TimescaleDB. The dashboards are fully responsive and look nice on phone, tablet, and computer screens.
+
+Out of the box, Grafana's charts are limited to single dimensional plots best suited to simple monitoring tasks rather than sophisticated analytics. But there are many community plugins to extend Grafana's functionality.
 
 ## The Code
 
