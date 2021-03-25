@@ -41,8 +41,11 @@ class VoltageEncoder(Encoder):
 
     def decode(self, value: bytes, field: Field) -> float:
         # simple scaler where maxint == 1023 == 1.65 V
-        val = int.from_bytes(value, field.byte_order)
-        return float(val) / 1023 * 1.65
+        val = float(int.from_bytes(value, field.byte_order))
+        val = val * 1.65 / 1023
+        # binary round to remove false precision (10 bit int input)
+        # max roundoff error is 1/4 the measurement resolution
+        return round(val * 1024) / 1024
 
 
 class CCS811(BaseDeviceAPI):
@@ -150,7 +153,7 @@ class CCS811(BaseDeviceAPI):
         ),
     )
 
-    def __init__(self, i2c_interface: SMBus, address_pin_level: int):
+    def __init__(self, i2c_interface: SMBus, address_pin_level: int = 0):
         super().__init__(i2c_interface, address_pin_level=address_pin_level)
 
         self.reset = ResetAPI(self, "reset")
