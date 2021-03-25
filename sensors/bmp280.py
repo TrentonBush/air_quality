@@ -320,8 +320,8 @@ class CtrlMeasAPI(BaseRegisterAPI):
             "osrs_p": pressure_oversampling,
             "mode": mode_map[measurement_mode],
         }
-        self._cached.update(field_map)
-        encoded = self._reg._field_values_to_raw_bytes(field_map)
+        self._cached = field_map
+        encoded = self._reg._field_values_to_raw_bytes(self._cached)
         self._parent_device._i2c_write(self._reg, encoded)
 
 
@@ -366,6 +366,6 @@ class ConfigAPI(BaseRegisterAPI):
             "filter": smoothing_const,
             "spi3w_en": disable_I2C,
         }
-        self._cached.update(field_map)
-        encoded = self._reg._field_values_to_raw_bytes(field_map)
+        self._cached = field_map
+        encoded = self._reg._field_values_to_raw_bytes(self._cached)
         self._parent_device._i2c_write(self._reg, encoded)

@@ -266,9 +266,9 @@ class ConfigAPI(BaseRegisterAPI):
             "rh_res_bits": humidity_resolution_bits,
             "measure_both": measure_both,
             "reserved": 0x00,  # always null
-            "battery_low": False,  # read only
+            "battery_low": False,  # read only. TODO: implement default field values on init
         }
-        self._cached.update(field_map)
+        self._cached = field_map
         encoded = self._reg._field_values_to_raw_bytes(self._cached)
         self._parent_device._i2c_write(self._reg, encoded)
         if soft_reset:
