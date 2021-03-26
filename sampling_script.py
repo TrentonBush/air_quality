@@ -10,6 +10,7 @@ import sys
 from sensors.bmp280 import BMP280
 from sensors.hdc1080 import HDC1080
 from sensors.ccs811 import CCS811
+from sensors.i2c_base import BaseRegisterAPI
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -36,12 +37,12 @@ def main(sample_period_s: int = 60) -> None:
 
     hdc = HDC1080(SMBus(1))  # needs separate SMBus instance due to timing issues
     hdc.config.write(soft_reset=True)
-    
+
     ccs = CCS811(i2c_interface)
     ccs.reset.write()
     ccs_interval = max([s for s in ccs.meas_mode._periods if s <= sample_period_s])
     ccs.meas_mode.write(sample_period=ccs_interval)
-    
+
     try:
         while True:
             # Synchronize: start every n seconds, no drift
@@ -52,7 +53,7 @@ def main(sample_period_s: int = 60) -> None:
                 pressure_oversampling=16, temperature_oversampling=2, measurement_mode="trigger"
             )
             hdc.data.read()  # 15 ms sleep is built in
-            ccs.env_data.write(**hdc.data.values)
+            io_safe_retries(ccs.env_data.write, **hdc.data.values)
 
             # wait for measurements to complete
             remaining = bmp.measurement_duration - hdc.measurement_duration
@@ -65,10 +66,11 @@ def main(sample_period_s: int = 60) -> None:
                 sleep(0.005)
                 bmp.status.read()
             bmp.data.read()
-            
-            ccs.data.read()
-            ccs.raw_data.read()
-            ccs.baseline.read()
+
+            # occasional clock stretching problems
+            io_safe_retries(ccs.data.read)
+            io_safe_retries(ccs.raw_data.read)
+            io_safe_retries(ccs.baseline.read)
 
             # log it
             write_to_db(
@@ -77,21 +79,31 @@ def main(sample_period_s: int = 60) -> None:
                 press=bmp.data.values["pressure"],
                 temp_hdc=hdc.data.values["temperature"],
                 humidity=hdc.data.values["humidity"],
-                eco2=ccs.data.values['eco2'],
-                tvoc=ccs.data.values['tvoc'],
-                current=ccs.raw_data.values['current_uA'],
-                voltage=ccs.raw_data.values['voltage'],
-                baseline=ccs.baseline.values['baseline']
+                eco2=ccs.data.values["eco2"],
+                tvoc=ccs.data.values["tvoc"],
+                current=ccs.raw_data.values["current_uA"],
+                voltage=ccs.raw_data.values["voltage"],
+                baseline=ccs.baseline.values["baseline"],
             )
 
     except KeyboardInterrupt:
         bmp.ctrl_meas.write(measurement_mode="sleep")
-        ccs.meas_mode.write(sample_period=0) # sleep
+        ccs.meas_mode.write(sample_period=0)  # sleep
         exit()
 
 
 def write_to_db(
-    connection: str, *, temp: float, press: float, temp_hdc: float, humidity: float, eco2: int, tvoc: int, current: int, voltage: float, baseline: int
+    connection: str,
+    *,
+    temp: float,
+    press: float,
+    temp_hdc: float,
+    humidity: float,
+    eco2: int,
+    tvoc: int,
+    current: int,
+    voltage: float,
+    baseline: int,
 ) -> None:
     sql = "INSERT INTO sensor_data(time, temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s);"
     data = (temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline)
@@ -110,6 +122,24 @@ def write_to_db(
         logger.error("Exception: {}".format(error.pgerror))
     finally:
         conn.close()
+
+
+def io_safe_retries(method, *args, **kwargs):
+    try:
+        return method(*args, **kwargs)
+    except (OSError, IOError) as error:
+        logger.error(f"Exception: {error}")
+        for _ in range(2):  # retries
+            sleep(0.001)
+            try:
+                return method(*args, **kwargs)
+            except (OSError, IOError):
+                continue
+        reset_cache(method.__self__)  # setting None will become NULL in database
+
+
+def reset_cache(reg: BaseRegisterAPI) -> None:
+    reg._cached = {k: None for k in reg.values.keys()}
 
 
 if __name__ == "__main__":
