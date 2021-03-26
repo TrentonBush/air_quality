@@ -5,10 +5,17 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 CREATE TABLE IF NOT EXISTS sensor_data (
     time timestamptz NOT NULL,
-    temp double precision,
+    temp real,
     press double precision,
-    humidity double precision,
-    temp_hdc double precision
+    humidity real,
+    temp_hdc real,
+    -- No unsigned ints in PG so I have to use 32 bits for uint16 values.
+    -- Won't matter after delta compression though
+    eco2 int,
+    tvoc int,
+    baseline int,
+    current smallint, -- 6 bits unsigned
+    voltage real
 );
 
 SELECT create_hypertable('sensor_data', 'time');

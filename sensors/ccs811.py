@@ -89,7 +89,7 @@ class CCS811(BaseDeviceAPI):
                 "data",
                 address=0x02,
                 fields=(
-                    Field("co2", byte_index=(0, 1)),
+                    Field("eco2", byte_index=(0, 1)),
                     Field("tvoc", byte_index=(2, 3)),
                 ),
                 read_only=True,
