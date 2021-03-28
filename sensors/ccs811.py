@@ -121,7 +121,7 @@ class CCS811(BaseDeviceAPI):
             Register(
                 "baseline",
                 address=0x11,
-                fields=(Field("baseline", byte_index=(0, 1)),),
+                fields=(Field("baseline", byte_index=(0, 1), byte_order="little"),),
                 n_bits=16,
             ),
             Register(
@@ -159,22 +159,22 @@ class CCS811(BaseDeviceAPI):
         self.reset = ResetAPI(self, "reset")
         self.env_data = EnvDataAPI(self, "env_data")
         self.meas_mode = MeasModeAPI(self, "meas_mode")
+        self.baseline = BaselineAPI(self, "baseline")
         # read only
         self.error_id = ReadOnlyRegisterAPI(self, "error_id")
         self.chip_id = ReadOnlyRegisterAPI(self, "chip_id")
         self.status = ReadOnlyRegisterAPI(self, "status")
         self.raw_data = ReadOnlyRegisterAPI(self, "raw_data")
         self.data = ReadOnlyRegisterAPI(self, "data")
-        # not read only but setting baseline manually is not implemented
-        self.baseline = ReadOnlyRegisterAPI(self, "baseline")
         self._start_device()
 
     def _start_device(self) -> None:
         self.status.read()
         if not self.status.values["app_valid"]:
             raise Exception("CCS811 application not valid")
-        self._i2c.write_byte(self.address, 0xF4)  # boot command
-        sleep(0.001)  # 1 ms startup time
+        if not self.status.values["app_on"]:
+            self._i2c.write_byte(self.address, 0xF4)  # boot command
+            sleep(0.001)  # 1 ms startup time
 
 
 class ResetAPI:
@@ -250,6 +250,16 @@ class MeasModeAPI(BaseRegisterAPI):
             "enable_interrupt": False,  # not implemented
             "interrupt_on_thresh": False,  # not implemented
         }
+        self._cached = field_map
+        encoded = self._reg._field_values_to_raw_bytes(self._cached)
+        self._parent_device._i2c_write(self._reg, encoded)
+
+
+class BaselineAPI(BaseRegisterAPI):
+    """baseline register API"""
+
+    def write(self, baseline: int) -> None:
+        field_map = {"baseline": baseline}
         self._cached = field_map
         encoded = self._reg._field_values_to_raw_bytes(self._cached)
         self._parent_device._i2c_write(self._reg, encoded)
