@@ -7,10 +7,10 @@ from dotenv import load_dotenv
 import os
 import sys
 
-from sensors.bmp280 import BMP280
-from sensors.hdc1080 import HDC1080
-from sensors.ccs811 import CCS811
-from sensors.i2c_base import BaseRegisterAPI
+from drivers.bmp280 import BMP280
+from drivers.hdc1080 import HDC1080
+from drivers.ccs811 import CCS811
+from drivers.i2c_base import BaseRegisterAPI
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)

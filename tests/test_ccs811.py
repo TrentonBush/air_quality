@@ -1,6 +1,6 @@
 import pytest
-from sensors.ccs811 import CCS811, HumidityFixedPoint, TemperatureFixedPoint
-from sensors.i2c_base import MockSMBus, Field
+from drivers.ccs811 import CCS811, HumidityFixedPoint, TemperatureFixedPoint
+from drivers.i2c_base import MockSMBus, Field
 
 
 @pytest.fixture(scope="class")

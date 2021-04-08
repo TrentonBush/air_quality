@@ -1,5 +1,5 @@
 import pytest
-from sensors.i2c_base import _count_trailing_zeros, Field, UIntEncoder, Register, Device
+from drivers.i2c_base import _count_trailing_zeros, Field, UIntEncoder, Register, Device
 
 
 def test__count_trailing_zeros__edge_no_trailing():

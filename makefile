@@ -1,4 +1,4 @@
-sensors_install:
+drivers_install:
 	pip install -e .
 
 user_i2c_permissions:
@@ -48,7 +48,7 @@ database_setup: timescaledb_install
 	psql -h localhost -p 5432 -U postgres -a -f ./sql/admin.sql
 	psql -h localhost -p 5432 -U postgres -d air_quality -a -f ./sql/db_setup.sql
 
-data_logger_service_install: database_setup sensors_install user_i2c_permissions
+data_logger_service_install: database_setup drivers_install user_i2c_permissions
 	# systemd service to run on boot as current user (instead of root)
 	# https://stackoverflow.com/questions/53928299/how-to-convert-a-python-script-in-a-local-conda-env-into-systemd-service-in-linu
 	mkdir -p ~/.config/systemd/user/

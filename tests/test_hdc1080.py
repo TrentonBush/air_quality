@@ -1,6 +1,6 @@
 import pytest
-from sensors.hdc1080 import MockHDC1080, TemperatureEncoder, HumidityEncoder
-from sensors.i2c_base import MockSMBus, Field
+from drivers.hdc1080 import MockHDC1080, TemperatureEncoder, HumidityEncoder
+from drivers.i2c_base import MockSMBus, Field
 
 
 @pytest.fixture(scope="class")
