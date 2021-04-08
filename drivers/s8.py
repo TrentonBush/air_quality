@@ -1,6 +1,6 @@
 """Driver for Senseair S8 Low Power 004-0-0053 CO2 sensor"""
 from time import sleep
-from typing import Optional, Dict
+from typing import Optional
 import serial
 
 
@@ -76,6 +76,11 @@ class S8Error(Exception):
     """device reported an error. Check status register"""
 
 
+def make_s8_serial_connection(device: str) -> serial.Serial:
+    # must have 9600 baud and timeout >= 0.2
+    return serial.Serial(port=device, baudrate=9600, timeout=1)
+
+
 class SenseairS8:
     """API for SenseAir S8 Low Power 004-0-0053 CO2 sensor"""
 
@@ -89,7 +94,7 @@ class SenseairS8:
         "co2":          b"\xfe\x04\x00\x03\x00\x01\xd5\xc5",
         "type_id":      b"\xfe\x04\x00\x19\x00\x02\xb4\x03",
         "fw_ver":       b"\xfe\x04\x00\x1c\x00\x01\xe4\x03",
-        "serial_id":    b"\xfe\x04\x00\x1d\x00\x01\xf5\xc2",
+        "serial_id":    b"\xfe\x04\x00\x1d\x00\x02\xf5\xc2",
         "error_code":   b"\xfe\x04\x00\x00\x00\x01\x25\xc5",
         "abc_period":   b"\xfe\x03\x00\x1f\x00\x01\xa1\xc3",
         "clear_ack":    b"\xfe\x06\x00\x00\x00\x00\x9d\xc5",
@@ -98,12 +103,8 @@ class SenseairS8:
         "disable_abc":  b"\xfe\x06\x00\x1f\x00\x00\xac\x03",
     }
 
-    def __init__(self, serial_dev: str) -> None:
-        self._ser = serial.Serial(
-            port=serial_dev,
-            baudrate=9600,
-            timeout=1,
-        )
+    def __init__(self, serial_dev: serial.Serial) -> None:
+        self._ser = serial_dev
         self._cached = {k: None for k in ["co2", 'type_id', 'fw_ver', 'serial_id', 'error_code', 'abc_period']}
         self._ser.flushInput()
 
@@ -197,3 +198,10 @@ class SenseairS8:
                 raise S8Error(
                     "Recalibration failed, possibly due to unstable CO2 concentration. Try again."
                 )
+
+
+class MockSerial:
+    def __init__(self) -> None:
+        pass
+    def flushInput(self) -> None:
+        pass
