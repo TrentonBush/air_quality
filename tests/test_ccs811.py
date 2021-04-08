@@ -107,7 +107,7 @@ def test_CCS811_reads(mocked_CCS811):
     assert actual == expected
 
     ccs.data.read()
-    expected = {"co2": 128, "tvoc": 256}
+    expected = {"eco2": 128, "tvoc": 256}
     actual = ccs.data.values
     assert actual == expected
 
