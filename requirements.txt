@@ -6,4 +6,5 @@ smbus2==0.4.1
 typer==0.3.2
 python-dotenv==0.15.0
 psycopg2==2.8.6
-pytest==6.2.1
+pyserial==3.5
+pytest[tests]==6.2.1
