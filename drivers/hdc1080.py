@@ -194,7 +194,7 @@ class HDC1080(BaseDeviceAPI):
         I2C_SLAVE = 0x0703  # from uapi/linux/i2c-dev.h, via smbus2.py
 
         def read():
-            with open(self._i2c.fd, mode="rb", closefd=False) as f:
+            with open(self._i2c.fd, mode="rb", closefd=False, buffering=0) as f:
                 ioctl(f, I2C_SLAVE, self.address)
                 return f.read(n_bytes)
 
