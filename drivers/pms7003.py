@@ -1,6 +1,6 @@
 """Driver for Plantower PMS7003 particulate matter sensor"""
 import struct
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 from serial import Serial
 
 
@@ -47,7 +47,7 @@ class PMS7003:
 
     def __init__(self, serial_dev: Serial) -> None:
         self._ser = serial_dev
-        self._cached = {k: 0 for k in PMS7003._fields[1:-1]}
+        self._cached = {k: 0 for k in PMS7003._fields[:-1]}
         self.mode: Optional[int] = None
         self._ser.flushInput()
         self.wake()
@@ -64,8 +64,9 @@ class PMS7003:
     def _parse_frame(self, frame: bytes) -> Dict[str, int]:
         if len(frame) != 30:
             raise ValueError(f"Expected 30 byte frame, got {len(frame)} bytes")
+        # checksum is byte-wise sum of message body
+        checksum = sum(frame[:-2]) + sum(PMS7003._start_bytes)
         parsed = struct.unpack(">HHHHHHHHHHHHHBBH", frame)  # doesn't include start bytes
-        checksum = sum(parsed[:-1]) + sum(PMS7003._start_bytes)
         if checksum != parsed[-1]:
             raise IOError(f"Checksum mismatch. Received {parsed[-1]}, calculated {checksum}")
         return dict(zip(PMS7003._fields[:-1], parsed[:-1]))
@@ -91,11 +92,11 @@ class PMS7003:
 
         while True:
             first_byte = self._ser.read(1)
-            if first_byte != PMS7003._start_bytes[0]:
+            if first_byte != PMS7003._start_bytes[0:1]:
                 continue
 
             second_byte = self._ser.read(1)
-            if second_byte != PMS7003._start_bytes[1]:
+            if second_byte != PMS7003._start_bytes[1:]:
                 continue
 
             frame = self._ser.read(30)
@@ -127,8 +128,11 @@ class PMS7003:
 
 
 class MockSerial:
-    def __init__(self, mock_frame: bytes) -> None:
-        self.frame = mock_frame
+    def __init__(
+        self, values: Tuple[int, ...]
+    ) -> None:  # should be length 30, but didn't want to write that out...
+        self.values = values
+        self.frame = PMS7003._start_bytes + struct.pack(">HHHHHHHHHHHHHBBH", *values)
         self.byte_idx = 0
 
     def flushInput(self) -> None:
