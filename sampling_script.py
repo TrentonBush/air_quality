@@ -43,7 +43,7 @@ def main(sample_period_s: int = 60) -> None:
     hdc.config.write(soft_reset=True)
 
     ccs = CCS811(i2c_interface)
-    ccs.reset.write()
+    # ccs.reset.write() # resets baseline, which is annoying
     ccs_interval = max([s for s in ccs.meas_mode._periods if s <= sample_period_s])
     ccs.meas_mode.write(sample_period=ccs_interval)
 
