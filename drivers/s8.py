@@ -1,7 +1,7 @@
 """Driver for Senseair S8 Low Power 004-0-0053 CO2 sensor"""
 from time import sleep
 from typing import Optional, Dict
-import serial
+from serial import Serial
 
 
 class ModbusCRC:
@@ -267,13 +267,13 @@ class ModbusCRC:
 
     @staticmethod
     def calc(message: bytes) -> bytes:
-        """calculate modbus CRC16 from a byte string, in little endian order as per modbus protocol.
+        """calculate modbus CRC16 from a byte string
 
         Args:
             message (bytes): body of a modbus message
 
         Returns:
-            bytes: CRC16
+            bytes: CRC16, in little endian order as per modbus protocol
         """
         crc = ModbusCRC._initial
         for byte in message:
@@ -300,9 +300,9 @@ class S8Error(Exception):
     """device reported an error. Check status register"""
 
 
-def make_s8_serial_connection(device: str) -> serial.Serial:
+def make_s8_serial_connection(device: str) -> Serial:
     # must have 9600 baud and timeout >= 0.2
-    return serial.Serial(port=device, baudrate=9600, timeout=1)
+    return Serial(port=device, baudrate=9600, timeout=1.5)
 
 
 class SenseairS8:
@@ -327,7 +327,7 @@ class SenseairS8:
         "disable_abc": b"\xfe\x06\x00\x1f\x00\x00\xac\x03",
     }
 
-    def __init__(self, serial_dev: serial.Serial) -> None:
+    def __init__(self, serial_dev: Serial) -> None:
         self._ser = serial_dev
         self._cached = {
             k: None for k in ["co2", "type_id", "fw_ver", "serial_id", "error_code", "abc_period"]
