@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     tvoc int,
     baseline int,
     current smallint, -- 6 bits unsigned
-    voltage real
+    voltage real,
+    co2 smallint -- 16 bits but range is 400 to 10000
 );
 
 SELECT create_hypertable('sensor_data', 'time');

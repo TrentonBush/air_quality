@@ -11,6 +11,7 @@ from drivers.bmp280 import BMP280
 from drivers.hdc1080 import HDC1080
 from drivers.ccs811 import CCS811
 from drivers.i2c_base import BaseRegisterAPI
+from drivers.s8 import SenseairS8, make_s8_serial_connection
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -31,6 +32,7 @@ def main(sample_period_s: int = 60) -> None:
 
     # sensor init
     i2c_interface = SMBus(1)
+
     bmp = BMP280(i2c_interface)
     bmp.reset.write()
     bmp.config.write(smoothing_const=1)
@@ -42,6 +44,9 @@ def main(sample_period_s: int = 60) -> None:
     ccs.reset.write()
     ccs_interval = max([s for s in ccs.meas_mode._periods if s <= sample_period_s])
     ccs.meas_mode.write(sample_period=ccs_interval)
+
+    serial_interface = make_s8_serial_connection("/dev/ttyAMA0")
+    s8 = SenseairS8(serial_interface)
 
     try:
         while True:
@@ -67,10 +72,12 @@ def main(sample_period_s: int = 60) -> None:
                 bmp.status.read()
             bmp.data.read()
 
-            # occasional clock stretching problems
+            # occasional clock stretching problems on this sensor
             io_safe_retries(ccs.data.read)
             io_safe_retries(ccs.raw_data.read)
             io_safe_retries(ccs.baseline.read)
+
+            s8.read_co2()
 
             # log it
             write_to_db(
@@ -84,6 +91,7 @@ def main(sample_period_s: int = 60) -> None:
                 current=ccs.raw_data.values["current_uA"],
                 voltage=ccs.raw_data.values["voltage"],
                 baseline=ccs.baseline.values["baseline"],
+                co2=s8.values["co2"],
             )
 
     except KeyboardInterrupt:
@@ -104,9 +112,10 @@ def write_to_db(
     current: int,
     voltage: float,
     baseline: int,
+    co2: int,
 ) -> None:
-    sql = "INSERT INTO sensor_data(time, temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s);"
-    data = (temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline)
+    sql = "INSERT INTO sensor_data(time, temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline, co2) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"
+    data = (temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline, co2)
 
     try:
         with psycopg2.connect(connection, connect_timeout=3) as conn:
