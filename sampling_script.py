@@ -4,6 +4,7 @@ import psycopg2
 import logging
 import typer
 from dotenv import load_dotenv
+from typing import Union
 import os
 import sys
 
@@ -12,6 +13,7 @@ from drivers.hdc1080 import HDC1080
 from drivers.ccs811 import CCS811
 from drivers.i2c_base import BaseRegisterAPI
 from drivers.s8 import SenseairS8, make_s8_serial_connection
+from drivers.pms7003 import PMS7003, make_pms7003_serial_connection
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -45,8 +47,11 @@ def main(sample_period_s: int = 60) -> None:
     ccs_interval = max([s for s in ccs.meas_mode._periods if s <= sample_period_s])
     ccs.meas_mode.write(sample_period=ccs_interval)
 
-    serial_interface = make_s8_serial_connection("/dev/ttyAMA0")
-    s8 = SenseairS8(serial_interface)
+    s8_serial = make_s8_serial_connection("/dev/ttyAMA0")
+    s8 = SenseairS8(s8_serial)
+
+    pms7003_serial = make_pms7003_serial_connection("/dev/ttyAMA1")
+    pms7003 = PMS7003(pms7003_serial)
 
     try:
         while True:
@@ -77,7 +82,8 @@ def main(sample_period_s: int = 60) -> None:
             io_safe_retries(ccs.raw_data.read)
             io_safe_retries(ccs.baseline.read)
 
-            s8.read_co2()
+            io_safe_retries(s8.read_co2)
+            io_safe_retries(pms7003.read)
 
             # log it
             write_to_db(
@@ -92,12 +98,14 @@ def main(sample_period_s: int = 60) -> None:
                 voltage=ccs.raw_data.values["voltage"],
                 baseline=ccs.baseline.values["baseline"],
                 co2=s8.values["co2"],
+                **pms7003.data_values,
             )
 
-    except KeyboardInterrupt:
+    finally:
         bmp.ctrl_meas.write(measurement_mode="sleep")
         ccs.meas_mode.write(sample_period=0)  # sleep
-        exit()
+        pms7003.sleep()
+        # hdc1080 doesn't need a sleep mode, s8 doesn't have one
 
 
 def write_to_db(
@@ -113,9 +121,44 @@ def write_to_db(
     voltage: float,
     baseline: int,
     co2: int,
+    pm1_0: int,
+    pm2_5: int,
+    pm10_0: int,
+    pm1_0_atm: int,
+    pm2_5_atm: int,
+    pm10_0_atm: int,
+    count_0_3: int,
+    count_0_5: int,
+    count_1_0: int,
+    count_2_5: int,
+    count_5_0: int,
+    count_10_0: int,
 ) -> None:
-    sql = "INSERT INTO sensor_data(time, temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline, co2) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"
-    data = (temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline, co2)
+    sql = "INSERT INTO sensor_data(time, temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline, co2, pm1_0, pm2_5, pm10_0, pm1_0_atm, pm2_5_atm, pm10_0_atm, count_0_3, count_0_5, count_1_0, count_2_5, count_5_0, count_10_0) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"
+    data = (
+        temp,
+        press,
+        temp_hdc,
+        humidity,
+        eco2,
+        tvoc,
+        current,
+        voltage,
+        baseline,
+        co2,
+        pm1_0,
+        pm2_5,
+        pm10_0,
+        pm1_0_atm,
+        pm2_5_atm,
+        pm10_0_atm,
+        count_0_3,
+        count_0_5,
+        count_1_0,
+        count_2_5,
+        count_5_0,
+        count_10_0,
+    )
 
     try:
         with psycopg2.connect(connection, connect_timeout=3) as conn:
@@ -147,7 +190,7 @@ def io_safe_retries(method, *args, **kwargs):
         reset_cache(method.__self__)  # setting None will become NULL in database
 
 
-def reset_cache(reg: BaseRegisterAPI) -> None:
+def reset_cache(reg: Union[BaseRegisterAPI, PMS7003, SenseairS8]) -> None:
     reg._cached = {k: None for k in reg.values.keys()}
 
 

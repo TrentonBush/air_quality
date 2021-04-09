@@ -5,8 +5,8 @@ from serial import Serial
 
 
 def make_pms7003_serial_connection(device: str) -> Serial:
-    # must have 9600 baud and timeout >= 0.2, per datasheet
-    return Serial(port=device, baudrate=9600, timeout=1.5)
+    # must have 9600 baud and timeout >= 2.3, per datasheet
+    return Serial(port=device, baudrate=9600, timeout=3)
 
 
 class PMS7003:
@@ -91,14 +91,7 @@ class PMS7003:
             )
 
         while True:
-            first_byte = self._ser.read(1)
-            if first_byte != PMS7003._start_bytes[0:1]:
-                continue
-
-            second_byte = self._ser.read(1)
-            if second_byte != PMS7003._start_bytes[1:]:
-                continue
-
+            self._ser.read_until(PMS7003._start_bytes)
             frame = self._ser.read(30)
             if len(frame) < 30:
                 continue
