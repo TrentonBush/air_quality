@@ -315,14 +315,16 @@ class SenseairS8:
     # For writes, the bytes are:
     # broadcast addr, func code, reg addr high, reg addr low, value high, value low, CRC low, CRC high
     _commands = {
+        # reads
         "co2": b"\xfe\x04\x00\x03\x00\x01\xd5\xc5",
         "type_id": b"\xfe\x04\x00\x19\x00\x02\xb4\x03",
         "fw_ver": b"\xfe\x04\x00\x1c\x00\x01\xe4\x03",
         "serial_id": b"\xfe\x04\x00\x1d\x00\x02\xf5\xc2",
         "error_code": b"\xfe\x04\x00\x00\x00\x01\x25\xc5",
         "abc_period": b"\xfe\x03\x00\x1f\x00\x01\xa1\xc3",
-        "clear_ack": b"\xfe\x06\x00\x00\x00\x00\x9d\xc5",
         "read_ack": b"\xfe\x03\x00\x00\x00\x01\x90\x05",
+        # writes
+        "clear_ack": b"\xfe\x06\x00\x00\x00\x00\x9d\xc5",
         "force_abc": b"\xfe\x06\x00\x01\x7c\x06\x6c\xc7",
         "disable_abc": b"\xfe\x06\x00\x1f\x00\x00\xac\x03",
     }

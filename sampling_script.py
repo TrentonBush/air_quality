@@ -75,7 +75,7 @@ def main(sample_period_s: int = 60) -> None:
             while bmp.status.values["measuring"]:
                 sleep(0.005)
                 bmp.status.read()
-            bmp.data.read()
+            io_safe_retries(bmp.data.read)
 
             # occasional clock stretching problems on this sensor
             io_safe_retries(ccs.data.read)
