@@ -17,7 +17,7 @@
 
 <img src="docs/images/smoke.jpg" width=70% alt="satellite image of smoke over the west coast">
 
-The west coast wildfire season prompts a lot of data reporting on outdoor air quality. Sensor networks like [purpleair.com](www.purpleair.com) provide impressive maps of outdoor air quality from local to continental scales. During these oppressive smoke events, health advocates advise to stay indoors. But how much better is indoor air quality? And what are the impacts of indoor activities like cooking, vacuuming, and just... breathing?
+The west coast wildfire season prompts a lot of data reporting on outdoor air quality. Sensor networks like [purpleair.com](https://www.purpleair.com/map) provide impressive maps of outdoor air quality from local to continental scales. During these oppressive smoke events, health advocates advise to stay indoors. But how much better is indoor air quality? And what are the impacts of indoor activities like cooking, vacuuming, and just... breathing?
 
 To answer these questions, I decided to set up sensors and log data.
 
