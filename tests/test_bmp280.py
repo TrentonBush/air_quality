@@ -1,6 +1,6 @@
 import pytest
-from sensors.bmp280 import _apply_calibration, BMP280
-from sensors.i2c_base import MockSMBus, Register, Field
+from drivers.bmp280 import _apply_calibration, BMP280
+from drivers.i2c_base import MockSMBus, Register, Field
 
 
 @pytest.fixture(scope="class")
@@ -23,19 +23,31 @@ def mocked_BMP280():
         0xF5: [0b10000100],  # config; t_sb=500, filter=2, spi3w_en=0,
         0xF7: [0x65, 0x5A, 0xC0, 0x7E, 0xED, 0x00],  # data
         0x88: [
-            0x70, 0x6B,  # calibration.dig_t1
-            0x43, 0x67,  # calibration.dig_t2
-            0x18, 0xFC,  # calibration.dig_t3
-            0x7D, 0x8E,  # calibration.dig_p1
-            0x43, 0xD6,  # calibration.dig_p2
-            0xD0, 0x0B,  # calibration.dig_p3
-            0x27, 0x0B,  # calibration.dig_p4
-            0x8C, 0x00,  # calibration.dig_p5
-            0xF9, 0xFF,  # calibration.dig_p6
-            0x8C, 0x3C,  # calibration.dig_p7
-            0xF8, 0xC6,  # calibration.dig_p8
-            0x70, 0x17,  # calibration.dig_p9
-        ]
+            0x70,
+            0x6B,  # calibration.dig_t1
+            0x43,
+            0x67,  # calibration.dig_t2
+            0x18,
+            0xFC,  # calibration.dig_t3
+            0x7D,
+            0x8E,  # calibration.dig_p1
+            0x43,
+            0xD6,  # calibration.dig_p2
+            0xD0,
+            0x0B,  # calibration.dig_p3
+            0x27,
+            0x0B,  # calibration.dig_p4
+            0x8C,
+            0x00,  # calibration.dig_p5
+            0xF9,
+            0xFF,  # calibration.dig_p6
+            0x8C,
+            0x3C,  # calibration.dig_p7
+            0xF8,
+            0xC6,  # calibration.dig_p8
+            0x70,
+            0x17,  # calibration.dig_p9
+        ],
     }
     smb = MockSMBus(registers)
     yield BMP280(smb)

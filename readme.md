@@ -59,13 +59,13 @@ Out of the box, Grafana's charts are limited to single dimensional plots best su
 
 This project consists of four parts:
 
-1. Hardware drivers for 5 air quality sensors, in ./sensors/
+1. Hardware drivers for 5 air quality sensors, in ./drivers/
 2. Data logging to the TimescaleDB database, in ./sampling_script.py
 3. systemd unit to start everything on boot and restart on failure, in ./data_logger.service
 4. Installation and configuration of all these parts, in ./makefile
 
 This setup runs on a Raspberry Pi 4 running Ubuntu 20.04 (aarch64/arm64).
-<img src="docs/images/sensors.jpg" width=70% alt="picture of RPi and sensors" title="The little monster and its sensors">
+<img src="docs/images/drivers.jpg" width=70% alt="picture of RPi and sensors" title="The little monster and its sensors">
 
 # What I Learned
 
