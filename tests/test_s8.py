@@ -15,7 +15,7 @@ def test_ModbusCRC_calc_known_value():
 def mocked_s8():
     """In this minimal implementation, I did not differentiate between input registers and holding registers.
     This creates an address collision between error_code and clear_ack/read_ack.
-    So you must pay attention to the order of reads/writes on this register.
+    So you must pay attention to the order of reads/writes when using this mock:
     The recalibration sequence will effect error_code."""
     registers = {
         b"\x00\x03": (500).to_bytes(2, "big"),  # co2 = 500
