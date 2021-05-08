@@ -182,7 +182,7 @@ def io_safe_retries(method, *args, **kwargs):
     except (OSError, IOError) as error:
         logger.error(f"{type(error).__name__}: {error}")
         for _ in range(2):  # retries
-            sleep(0.001)
+            sleep(0.005)
             try:
                 return method(*args, **kwargs)
             except (OSError, IOError):
