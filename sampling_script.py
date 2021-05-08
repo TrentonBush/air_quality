@@ -134,7 +134,7 @@ def write_to_db(
     count_5_0: int,
     count_10_0: int,
 ) -> None:
-    sql = "INSERT INTO sensor_data(time, temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline, co2, pm1_0, pm2_5, pm10_0, pm1_0_atm, pm2_5_atm, pm10_0_atm, count_0_3, count_0_5, count_1_0, count_2_5, count_5_0, count_10_0) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"
+    sql = "INSERT INTO sensor_data(ts, temp, press, temp_hdc, humidity, eco2, tvoc, current, voltage, baseline, co2, pm1_0, pm2_5, pm10_0, pm1_0_atm, pm2_5_atm, pm10_0_atm, count_0_3, count_0_5, count_1_0, count_2_5, count_5_0, count_10_0) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"
     data = (
         temp,
         press,

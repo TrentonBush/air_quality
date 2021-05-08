@@ -4,7 +4,7 @@ GRANT SELECT ON public.air_quality TO grafanareader;
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 CREATE TABLE IF NOT EXISTS sensor_data (
-    time timestamptz NOT NULL,
+    ts timestamptz NOT NULL,
     temp real,
     press double precision,
     humidity real,
